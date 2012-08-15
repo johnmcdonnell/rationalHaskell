@@ -1,12 +1,29 @@
 
-import Data.List (nub, group, groupBy, transpose, sort, splitAt)
+module Rational (
+                 dropByIndex,
+                 replaceAtIndex,
+                 clusterPosterior,
+                 Stim,
+                 Partition
+                ) where
+
+import Data.List (nub, group, groupBy, transpose, sortBy, splitAt)
 import Data.Function (on)
 import Data.Maybe (fromJust, catMaybes, maybe)
+
+import JohnFuns (debug)
 import Stats
 
 -- * Convenience functions
-changeByIndex l i newval = take i l ++ drop (i+1) l
-replaceAtIndex l i newval = (\(x, y) -> x ++ (newval:tail y) ) $ splitAt i l
+safetail :: [a] -> [a]
+safetail [] = []
+safetail x = tail x
+
+dropByIndex l i newval = take i l ++ drop (i+1) l
+replaceAtIndex i newval l = (\(x, y) -> x ++ (newval:safetail y) ) $ splitAt i l
+
+gatherBy :: Ord b => (a -> b) -> [a] -> [[a]]
+gatherBy f = (groupBy ((==) `on` f)) . (sortBy (compare `on` f))
 
 -- * Stim dattype and associated functions
 type Stim = [Double]
@@ -25,16 +42,20 @@ dropAssignment assignments i
     nclusts       = (length . nub) assignRest
     clustmembers  = filter (==clust) assignRest
     assignRest    = catMaybes assignDropped
-    assignDropped = replaceAtIndex assignments i Nothing
+    assignDropped = replaceAtIndex i Nothing assignments
     clust         = fromJust $ assignments!!i
 
-
 -- Likelihood that a stimulus belongs to each cluster
-assignDist :: [PDFFromSample] -> [Stim] -> Partition -> Stim -> [Double]
-assignDist distributions stimuli assignments newstim = clustLikelihoods
+clusterPosterior :: ClusterPrior -> [PDFFromSample] -> [Stim] -> Partition -> Stim -> [Double]
+clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) posterior
   where
-    clustLikelihoods = map clustLik (clusts ++ [[]] )
+    norm = sum posterior
+    posterior = zipWith (*) clustPriors clustLikelihoods
+    -- NOTE: watch out that the stim to be assigned isn't assigned in assignments.
+    clustPriors = cprior (catMaybes assignments)
+    clustLikelihoods = map clustLik clusts ++ [emptyClustLik]
     clustLik clust = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (transpose clust) newstim
-    clusts = map (map snd) $ groupBy ((==) `on` fst) $ sortBy (compare `on` fst) $ (zip assignments stimuli)
+    emptyClustLik = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (replicate 5 []) newstim
+    clusts = (map (map snd) $ gatherBy fst $ (zip assignments stimuli))
 
 
