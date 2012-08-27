@@ -1,14 +1,14 @@
 
 -- import qualified Control.Monad.State as State
 import Data.Function (on)
-import Data.List (maximumBy)
+import Data.List (maximumBy, transpose)
 import Data.Maybe
 import System.Random
-import Data.Random
-
-import qualified Data.IORef as IORef
 import Control.Monad (forM, forM_)
 import Control.Applicative
+import qualified Data.IORef as IORef
+
+import Math.Statistics
 
 import JohnFuns (debug)
 import Stats
@@ -55,18 +55,18 @@ onedtask params n = do
     runRandomIO $ shuffleNR stims (n * (length params))
 
 continuous = do
-    let mu1 = 3
+    let mu1 = 15
     let sigma1 = 1
     let mu2 = -15
     let sigma2 = 1
-    let n = 10
+    let n = 3
     putStrLn "Testing on:" 
     putStrLn $ "mu1=" ++ (show mu1) ++ " sigma1=" ++ (show sigma1) ++ " n=" ++ (show n)
     putStrLn $ "mu2=" ++ (show mu2) ++ " sigma2=" ++ (show sigma2) ++ " n=" ++ (show n)
     task <- onedtask [(mu1, sigma1), (mu2, sigma2)] n
     
-    let tprior = (0, 1, 1, 1)
-    let prior  = (0.5, [tPosterior tprior])
+    let tpriors = [tPosterior (mean items, stddev items, 1, 1) | items <- transpose task ]
+    let prior  = (1.0, tpriors)
     partition <- andersonSample prior task
     forM_ (zip task (catMaybes partition)) print
 
