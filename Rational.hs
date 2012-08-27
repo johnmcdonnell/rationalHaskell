@@ -53,9 +53,10 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
     posterior = zipWith (*) clustPriors clustLikelihoods
     -- NOTE: watch out that the stim to be assigned isn't assigned in assignments.
     clustPriors = cprior (catMaybes assignments)
-    clustLikelihoods = map clustLik clusts ++ [emptyClustLik]
+    clustLikelihoods = debug $ map clustLik clusts ++ [emptyClustLik]
     clustLik clust = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (transpose clust) newstim
-    emptyClustLik = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (replicate 5 []) newstim
+    emptyClustLik = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (replicate stimlength []) newstim
     clusts = (map (map snd) $ gatherBy fst $ (zip assignments stimuli))
+    stimlength = (length . head) stimuli
 
 
