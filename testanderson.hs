@@ -70,8 +70,32 @@ zeithamovaMaddox (contalpha, contlambda) n = do
     astims <- binormalSamples bimodmean1 unimodmean bimodsd unimodsd n
     bstims <- binormalSamples bimodmean2 unimodmean bimodsd unimodsd n
     items <- runRandomIO $ shuffleNR (astims ++ bstims) (n * 2)
+    let itemswithlabels = map (\x -> x ++ [Nothing]) items
     let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
-    return (items, tpriors)
+    let multinomprior =  multinomialPosterior [1, 1]
+    return (itemswithlabels, tpriors ++ [multinomprior])
+
+tvLabelFun :: Stim -> Stim
+tvLabelFun [ Just bimod, Just unimod ] 
+  | bimod < 300 && unimod > 55 = [ Just bimod, Just unimod, Just 0  ]
+  | bimod > 300 && unimod < 35 = [ Just bimod, Just unimod, Just 1  ]
+  | otherwise                  = [ Just bimod, Just unimod, Nothing ]
+
+tvTask :: (Double, Double) -> Int -> IO ([Stim], [PDFFromSample])
+tvTask (contalpha, contlambda) n = do
+    -- length bimodal
+    let bimodmean1 = 187.5
+    let bimodmean2 = 412.5
+    let bimodsd = 12.5
+    let unimodmean = 45
+    let unimodsd = 15
+    astims <- binormalSamples bimodmean1 unimodmean bimodsd unimodsd n
+    bstims <- binormalSamples bimodmean2 unimodmean bimodsd unimodsd n
+    items <- runRandomIO $ shuffleNR (astims ++ bstims) (n * 2)
+    let itemswithlabels = map tvLabelFun items
+    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
+    let multinomprior =  multinomialPosterior [1, 1]
+    return (itemswithlabels, tpriors ++ [multinomprior])
 
 testContinuous = do
     let mu1 = 1
@@ -95,8 +119,16 @@ testZeithamova = do
     partition <- andersonSample prior task
     forM_ (zip task (catMaybes partition)) print
 
+testTVTask = do
+    (task, distpriors) <- tvTask (1, 1) 100
+    
+    let prior  = (1.0, distpriors)
+    partition <- andersonSample prior task
+    forM_ (zip task (catMaybes partition)) print
+
 main = do
     -- testMedinSchaffer
     -- testContinuous
-    testZeithamova
+    -- testZeithamova
+    testTVTask
 

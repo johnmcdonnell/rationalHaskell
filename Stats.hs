@@ -47,6 +47,8 @@ tPosterior prior sample (Just query) = tatval alphai x
     n = fromIntegral $ length sample
     (mu0, sigma0, alpha0, lambda0) = prior
 
+-- Multinomial values must be in the set [0..n-1] where n is the number of
+-- possible values.
 multinomialPosterior :: [Double] -> PDFFromSample
 multinomialPosterior _ _ Nothing = 1
 multinomialPosterior alphas sample (Just query) = (cj + alphas!!(floor query)) / (n + alpha0)
