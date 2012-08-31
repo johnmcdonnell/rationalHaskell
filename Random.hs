@@ -1,64 +1,30 @@
 
-module Random (R,
-               runRandom,
-               runRandomIO,
-               rand,
-               normals,
-               shuffleR,
-               shuffleNR
+module Random (
+               normalsM,
+               binormals
                ) where
 
 import Control.Monad
-import Control.Monad.State (State, evalState, get, put)
+import Control.Monad.Random
 import System.Random (Random, StdGen, getStdGen, mkStdGen, random)
 import System.Random.Shuffle
+import Data.Random.Normal
 import Control.Applicative ((<$>))
+
+import JohnFuns
 
 -- Thanks to: http://stackoverflow.com/questions/2110535/sampling-sequences-of-random-numbers-in-haskell/2125329#2125329
 -- for a start on this.
 
-type R a = State StdGen a
+normalsM :: RandomGen g => Double -> Double -> Rand g [Double]
+normalsM mu sd = do
+    s <- getSplit
+    return $ normals' (mu, sd) s
 
-runRandom :: R a -> Int -> a
-runRandom action seed = evalState action $ mkStdGen seed
-
-runRandomIO :: R a -> IO a
-runRandomIO action = (return . (evalState action)) =<< getStdGen
-
-rand :: (Random a) => R a
-rand = do
-  gen <- get
-  let (r, gen') = random gen
-  put gen'
-  return r
-
-randPair :: (Random a) => R (a, a)
-randPair = do
-  x <- rand
-  y <- rand
-  return (x,y)
-
--- Random int between lower and (upper-1)
-randInt :: Int -> Int ->  R Int
-randInt lower upper = do
-  let range = upper - lower
-  x <- rand :: R Double
-  return $ floor $ (x * (fromIntegral range)) + (fromIntegral lower)
-
-boxMuller :: Double -> Double -> (Double, Double) -> Double
-boxMuller mu sigma (r1,r2) =  mu + sigma * sqrt (-2 * log r1) * cos (2 * pi * r2)
-
-normals :: Double -> Double -> R [Double]
-normals mu sd = mapM (\_ -> boxMuller mu sd <$> randPair) $ repeat ()
-
-shuffleNR :: [a] -> Int -> R [a]
-shuffleNR xs n =
-    (shuffle xs) <$> (sequence $ map (\i -> randInt 0 (n-i) ) [1..(n-1)])
-
-shuffleR :: [a] -> R [a]
-shuffleR xs = shuffleNR xs n
-  where
-    n = length xs
-
+binormals :: (RandomGen g) => Double -> Double -> Double -> Double -> Int -> Rand g [[Double]]
+binormals mean1 mean2 sd1 sd2 n = do
+    first <- (take n) <$> (normalsM mean1 sd1)
+    second <- (take n) <$> (normalsM mean2 sd2)
+    return $ zipWith (\x y -> [x,y]) first second
 
 
