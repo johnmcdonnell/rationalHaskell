@@ -21,14 +21,17 @@ tatval = StatDist.density . studentT
 
 -- * Generating PDFs from a sample of points
 
-type PDFFromSample = [Double] -> Double -> Double
+type PDFFromSample = [Double] -> Maybe Double -> Double
+
 fillerDistribtution :: PDFFromSample
-fillerDistribtution sample query = 0.5
+fillerDistribtution sample Nothing = 0.5
+fillerDistribtution sample (Just query) = 0.5
 
 type ClusterPrior = [Int] -> [Double]
 
 tPosterior :: (Double, Double, Double, Double) -> PDFFromSample
-tPosterior prior sample query = tatval alphai x
+tPosterior _ _ Nothing = 1
+tPosterior prior sample (Just query) = tatval alphai x
   where
     x =  (query - mui) / tstdev
     tstdev = sigmai * (sqrt (1 + (1/lambdai)))
@@ -45,7 +48,8 @@ tPosterior prior sample query = tatval alphai x
     (mu0, sigma0, alpha0, lambda0) = prior
 
 multinomialPosterior :: [Double] -> PDFFromSample
-multinomialPosterior alphas sample query = (cj + alphas!!(floor query)) / (n + alpha0)
+multinomialPosterior _ _ Nothing = 1
+multinomialPosterior alphas sample (Just query) = (cj + alphas!!(floor query)) / (n + alpha0)
   where
     cj = fromIntegral $ length $ filter (==query) sample
     n = fromIntegral $ length sample

@@ -9,7 +9,7 @@ module Rational (
 
 import Data.List (nub, group, groupBy, transpose, sortBy, splitAt)
 import Data.Function (on)
-import Data.Maybe (fromJust, catMaybes, maybe, isJust)
+import Data.Maybe
 
 import JohnFuns (debug)
 import Stats
@@ -26,7 +26,7 @@ gatherBy :: Ord b => (a -> b) -> [a] -> [[a]]
 gatherBy f = (groupBy ((==) `on` f)) . (sortBy (compare `on` f))
 
 -- * Stim dattype and associated functions
-type Stim = [Double]
+type Stim = [Maybe Double]
 
 -- * Partition dattype and associated functions
 type Partition = [Maybe Int]
@@ -54,9 +54,9 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
     -- NOTE: watch out that the stim to be assigned isn't assigned in assignments.
     clustPriors = cprior (catMaybes assignments)
     clustLikelihoods = map clustLik clusts ++ [emptyClustLik]
-    clustLik clust = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (transpose clust) newstim
+    clustLik clust = product $ zipWith3 (\dist sample query -> dist (catMaybes sample) query ) distributions (transpose clust) newstim
     emptyClustLik = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (replicate stimlength []) newstim
-    clusts = (map (map snd) $ gatherBy fst $ filter (isJust . fst) $ (zip assignments stimuli))
+    clusts = map (map snd) $ gatherBy fst $ filter (isJust . fst) $ (zip assignments stimuli)
     stimlength = (length . head) stimuli
 
 

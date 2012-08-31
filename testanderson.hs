@@ -16,17 +16,18 @@ import Rational
 import Anderson
 
 
-medinSchafferTask :: [Double] -> ([[Double]], [PDFFromSample])
-medinSchafferTask multinomAlphas = (medinSchafferTask, andersondists)
+medinSchafferTask :: [Double] -> ([Stim], [PDFFromSample])
+medinSchafferTask multinomAlphas = (medinSchafferStims, andersondists)
   where 
     andersondists = replicate 5 multinom_prior
     multinom_prior = multinomialPosterior multinomAlphas
-    medinSchafferTask = [[1,1,1,1,1], 
-                         [1,0,1,0,1], 
-                         [1,0,1,1,0], 
-                         [0,0,0,0,0], 
-                         [0,1,0,1,1], 
-                         [0,1,0,0,0]]
+    medinSchafferStims = map (map Just) medinSchafferItems
+    medinSchafferItems = [[1,1,1,1,1], 
+                          [1,0,1,0,1], 
+                          [1,0,1,1,0], 
+                          [0,0,0,0,0], 
+                          [0,1,0,1,1], 
+                          [0,1,0,0,0]]
     
 
 testMedinSchaffer = do
@@ -34,27 +35,27 @@ testMedinSchaffer = do
     let couplingParam = 1.0
     andersonSample (couplingParam, dists) task
 
-onedtask :: [(Double, Double)] -> Int -> IO ([[Double]], [PDFFromSample])
+onedtask :: [(Double, Double)] -> Int -> IO ([Stim], [PDFFromSample])
 onedtask params n = do
-    samples <- forM params (\(mu, sigma) -> (take n) <$> runRandomIO (normals mu sigma))
+    samples <- forM params (\(mu, sigma) -> (take n) . (map Just) <$> runRandomIO (normals mu sigma))
     let stims = map (\x -> [x]) $ concat samples
     items <- runRandomIO $ shuffleNR stims (n * (length params))
-    let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- transpose items ]
+    let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- (transpose . (map catMaybes)) items ]
     return (items, tpriors)
 
 
 twodtask :: [(Double, Double)] -> Int -> IO ([Stim], [PDFFromSample])
 twodtask params n = do
     let mergeDims = (\(x,y) -> zipWith (\x y -> [x,y]) x y)
-    stims <- forM params (\(mu, sigma) -> (mergeDims . (splitAt n) . (take $ n*2)) <$> runRandomIO (normals mu sigma))
+    stims <- forM params (\(mu, sigma) -> (mergeDims . (splitAt n) . (take $ n*2) . map Just) <$> runRandomIO (normals mu sigma))
     items <- runRandomIO $ shuffleNR (concat stims) (n * (length params))
-    let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- transpose items ]
+    let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- (transpose . map catMaybes) items ]
     return (items, tpriors)
 
 binormalSamples :: Double -> Double -> Double -> Double -> Int -> IO [Stim]
 binormalSamples mean1 mean2 sd1 sd2 n = do
-    first <- runRandomIO (normals mean1 sd1)
-    second <- runRandomIO (normals mean2 sd2)
+    first <- map Just <$> runRandomIO (normals mean1 sd1)
+    second <- map Just <$> runRandomIO (normals mean2 sd2)
     return $ take n $ zipWith (\x y -> [x,y]) first second
     
 
@@ -69,7 +70,7 @@ zeithamovaMaddox (contalpha, contlambda) n = do
     astims <- binormalSamples bimodmean1 unimodmean bimodsd unimodsd n
     bstims <- binormalSamples bimodmean2 unimodmean bimodsd unimodsd n
     items <- runRandomIO $ shuffleNR (astims ++ bstims) (n * 2)
-    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- transpose items ]
+    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
     return (items, tpriors)
 
 testContinuous = do
