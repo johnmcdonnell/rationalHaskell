@@ -6,14 +6,16 @@ import Data.Maybe
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Random
+import System.Environment (getArgs)
 import System.Random
 import System.Random.Shuffle
+import Text.CSV
 
 import Math.Statistics
 
 import Graphics.Gnuplot.Simple
 
-import JohnFuns (debug, groupsortBy)
+import JohnFuns
 import Random
 
 import Stats
@@ -22,16 +24,17 @@ import Anderson
 
 -- Convenience functions
 
-plotpoints :: [(Double, Double)] -> IO ()
-plotpoints = plotListStyle [] defaultStyle{ plotType=Dots }
+-- plotpoints :: [(Double, Double)] -> IO ()
+-- plotpoints = plotListStyle [] defaultStyle{ plotType=Dots }
 
 
+-- Science etc
 
 medinSchafferTask :: [Double] -> ([Stim], [PDFFromSample])
-medinSchafferTask multinomAlphas = (medinSchafferStims, andersondists)
+medinSchafferTask binomAlphas = (medinSchafferStims, andersondists)
   where 
-    andersondists = replicate 5 multinom_prior
-    multinom_prior = multinomialPosterior multinomAlphas
+    andersondists = replicate 5 binom_prior
+    binom_prior = binomialPosterior binomAlphas
     medinSchafferStims = map (map Just) medinSchafferItems
     medinSchafferItems = [[1,1,1,1,1], 
                           [1,0,1,0,1], 
@@ -43,7 +46,7 @@ medinSchafferTask multinomAlphas = (medinSchafferStims, andersondists)
 
 testMedinSchaffer = do
     let (task, dists) = medinSchafferTask [1,1]
-    let couplingParam = 1.0
+    let couplingParam = dirichletProcess 1.0
     andersonSample (couplingParam, dists) task
 
 onedtask :: [(Double, Double)] -> Int -> IO ([Stim], [PDFFromSample])
@@ -63,24 +66,6 @@ twodtask params n = do
     let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- (transpose . map catMaybes) items ]
     return (items, tpriors)
 
-    
-
-zeithamovaMaddox :: (Double, Double) -> Int -> IO ([Stim], [PDFFromSample])
-zeithamovaMaddox (contalpha, contlambda) n = do
-    -- length bimodal
-    let bimodmean1 = 187.5
-    let bimodmean2 = 412.5
-    let bimodsd = 12.5
-    let unimodmean = 45
-    let unimodsd = 15
-    astims <-  evalRandIO $ map (map Just) <$> binormals bimodmean1 unimodmean bimodsd unimodsd n
-    bstims <- evalRandIO $ map (map Just) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
-    items <- evalRandIO $ shuffleM (astims ++ bstims)
-    let itemswithlabels = map (\x -> x ++ [Nothing]) items
-    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
-    let multinomprior =  multinomialPosterior [1, 1]
-    return (itemswithlabels, tpriors ++ [multinomprior])
-
 tvLabelFun :: Stim -> Stim
 tvLabelFun [ Just bimod, Just unimod ] 
   | bimod < 300 && unimod > 55 = [ Just bimod, Just unimod, Just 0  ]
@@ -99,9 +84,62 @@ tvTask (contalpha, contlambda) n = do
     bstims <- evalRandIO $ (map (map Just)) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
     items <- evalRandIO $ shuffleM (astims ++ bstims)
     let itemswithlabels = map tvLabelFun items
+    let tpriors = [tPosterior (0.5, 0.2, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
+    let binomprior =  binomialPosterior [1, 1]
+    return (itemswithlabels, tpriors ++ [binomprior])
+    
+
+zeithamovaMaddox :: (Double, Double) -> Int -> IO ([Stim], [PDFFromSample])
+zeithamovaMaddox (contalpha, contlambda) n = do
+    -- length bimodal
+    let bimodmean1 = 187.5
+    let bimodmean2 = 412.5
+    let bimodsd = 12.5
+    let unimodmean = 45
+    let unimodsd = 15
+    astims <-  evalRandIO $ map (map Just) <$> binormals bimodmean1 unimodmean bimodsd unimodsd n
+    bstims <- evalRandIO $ map (map Just) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
+    items <- evalRandIO $ shuffleM (astims ++ bstims)
+    let itemswithlabels = map (\x -> x ++ [Nothing]) items
     let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
-    let multinomprior =  multinomialPosterior [1, 1]
-    return (itemswithlabels, tpriors ++ [multinomprior])
+    let binomprior =  binomialPosterior [1, 1]
+    return (itemswithlabels, tpriors ++ [binomprior])
+
+randomInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Rand g [a]
+randomInSquare xbounds ybounds = do
+    x <- getRandomR xbounds
+    y <- getRandomR ybounds
+    return [x, y]
+
+randomsInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Int -> Rand g [[a]]
+randomsInSquare xbounds ybounds n = sequence $ replicate n (randomInSquare xbounds ybounds)
+
+mcdonnellTask :: (Double, Double) -> Int -> Int -> IO ([Stim], [PDFFromSample])
+mcdonnellTask (contalpha, contlambda) n nlab = do
+    let (boxmultiplier, nrem) = quotRem n 28
+    let (perCat, nlabrem) = quotRem nlab 2
+    let unlab = n - nlab
+    when (nrem /=0 ) $ error $ "McDonnell Task n must be divisible by 28. Instead it was " ++ show n 
+    when (nlabrem /= 0) $ error $ "McDonnell Task nlab must be divisible by 2. Instead it was " ++ show nlab
+    let bimodBounds = map (,,) [(0, 0.2), (0.8, 1)]
+    let boxBorders = [0,0.2..1]
+    let boxes = zip (init boxBorders) (tail boxBorders)
+    let boxcounts = (map (*boxmultiplier) [2,3,4,3,2])
+    let stimArgs = map uncurry bimodBounds <*> (zip boxes boxcounts)
+    stimlocsGrouped <- evalRandIO $ sequence $ map (\(xs, ys, n) -> randomsInSquare xs ys n) stimArgs
+    let stimlocs = concat stimlocsGrouped
+    let labs = (replicate perCat $ Just 0) ++ (replicate unlab Nothing) ++ (replicate perCat $ Just 1)
+    let stims =  zipWith (\loc maybelab -> (map Just loc) ++ [maybelab])  stimlocs labs
+    shuffledstims <- evalRandIO $ shuffleM stims
+    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- transpose stimlocs ]
+    let binomprior =  binomialPosterior [1, 1]
+    return (shuffledstims, tpriors ++ [binomprior])
+
+runGridTest :: ClusterPrior -> [PDFFromSample] -> [Stim] -> Partition -> [(Stim, Double)]
+runGridTest cprior distributions stimuli assignments = zip grid labels
+  where 
+    labels = map head $ map (infer cprior distributions stimuli assignments) grid
+    grid = (\x y -> [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
 
 testContinuous = do
     let mu1 = 1
@@ -114,42 +152,46 @@ testContinuous = do
     putStrLn $ "mu2=" ++ (show mu2) ++ " sigma2=" ++ (show sigma2) ++ " n=" ++ (show n)
     (task, distpriors) <- twodtask [(mu1, sigma1), (mu2, sigma2)] n
     
-    let prior  = (1.0, distpriors)
+    let prior  = (dirichletProcess 1.0, distpriors)
     partition <- andersonSample prior task
     forM_ (zip task (catMaybes partition)) print
 
 testZeithamova = do
     (task, distpriors) <- zeithamovaMaddox (1, 1) 100
     
-    let prior  = (1.0, distpriors)
+    let prior  = (dirichletProcess 1.0, distpriors)
     partition <- andersonSample prior task
     forM_ (zip task (catMaybes partition)) print
 
 testTVTask = do
+    args <- getArgs
+    let cparam = if length args > 0 then read (head args) else 1
+    
     -- Set up priors
-    (task, distpriors) <- tvTask (1, 1) 100
-    print task
-    print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
-    -- plotpoints $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
-    let prior  = (1.0, distpriors)
+    (task, distpriors) <- mcdonnellTask (1, 1) (28*8) 32
+    -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
+    
+    let prior  = (dirichletProcess cparam, distpriors)
     
     -- Now run the model
     partition <- andersonSample prior task
-
+    
     -- Dump all those mabies
-    let demabify [bimod,unimod,lab] = [fromJust bimod, fromJust unimod, fromMaybe 1 lab]
+    let demabify [bimod,unimod,lab] = [fromJust bimod, fromJust unimod, fromMaybe (-9) lab]
     let demabified = map demabify task
-    let results = map (\(x,Just y) -> (x,y)) $ (filter (isJust . snd)) $ zip demabified partition
+    let results = map (\(x,Just y) -> x ++ [fromIntegral y]) $ (filter (isJust . snd)) $ zip demabified partition
+    let resultstrings = map (map show) results
     
     -- Print it out
-    --forM_ results print
-
+    putStrLn $ printCSV $ map ("STIM":) resultstrings
+    
     -- Plot it
-    -- let grouped = map ((take 2) . fst) $ groupsortBy snd results
-    let grouped = map (map (\([x,y,_],_) -> (x,y))) $ groupsortBy snd results
-    -- print $ map (\x -> (Dots, x))
-    -- mapM_ print $ sortBy (compare `on` fst) (grouped!!0)
-    plotListsStyle [] $ map (\x -> (defaultStyle{ plotType=Dots }, x)) grouped
+    --let grouped = map (map (\([x,y,_],_) -> (x,y))) $ groupsortBy snd results
+    -- plotListsStyle [] $ map (\x -> (defaultStyle {plotType = Dots, lineSpec = CustomStyle [PointType 5]}, x)) grouped
+    --plotListsStyle [LineStyle 1 [PointType 1, PointSize 0.8]] $ map (\x -> (defaultStyle {plotType = Dots}, x)) grouped
+    
+    -- Get inference at each point in a grid
+    putStrLn $ printCSV $ map (("INFER":) . (map show) . \(stim, resp) -> (take 2 . demabify) stim ++ [resp] ) $ (uncurry runGridTest) prior task partition 
 
 main = do
     -- testMedinSchaffer

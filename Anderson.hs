@@ -3,6 +3,7 @@ module Anderson (andersonSample) where
 
 import Data.Function
 import Data.List
+import Data.Maybe
 import Control.Monad
 import qualified Data.IORef as IORef
 
@@ -10,14 +11,13 @@ import Stats
 import Rational
 
 -- Anderson sampling
-sampleNext :: (Double, [PDFFromSample]) -> [Stim] -> Partition -> Stim -> Int
-sampleNext (couplingParam, distributions) stimuli assignments newstim = assignment
+sampleNext :: (ClusterPrior, [PDFFromSample]) -> [Stim] -> Partition -> Stim -> Int
+sampleNext (clusterPrior, distributions) stimuli assignments newstim = assignment
   where 
     assignment = fst $ maximumBy (compare `on` snd) $ zip [0..] posterior
     posterior = clusterPosterior clusterPrior distributions stimuli assignments newstim
-    clusterPrior = dirichletProcess couplingParam
 
-andersonSample :: (Double, [PDFFromSample])  -- ^ (Coupling param, posterior estimators for each dimension)
+andersonSample :: (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
                -> [Stim]                     -- ^ Task stimuli
                ->  IO Partition
 andersonSample prior stimuli = do
@@ -33,3 +33,5 @@ andersonSample prior stimuli = do
     -- print "FINAL:"
     -- print final
     return final
+
+

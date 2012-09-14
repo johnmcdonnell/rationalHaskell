@@ -2,7 +2,7 @@
 
 module Stats (PDFFromSample,
               ClusterPrior,
-              multinomialPosterior,
+              binomialPosterior,
               tPosterior,
               dirichletProcess) where
 
@@ -21,19 +21,18 @@ tatval = StatDist.density . studentT
 
 -- * Generating PDFs from a sample of points
 
-type PDFFromSample = [Double] -> Maybe Double -> Double
+type PDFFromSample = [Double] -> (Maybe Double -> Double, Double)
 
 fillerDistribtution :: PDFFromSample
-fillerDistribtution sample Nothing = 0.5
-fillerDistribtution sample (Just query) = 0.5
+fillerDistribtution sample = ((\x -> 0.5), 0.5)
 
 type ClusterPrior = [Int] -> [Double]
 
 tPosterior :: (Double, Double, Double, Double) -> PDFFromSample
-tPosterior _ _ Nothing = 1
-tPosterior prior sample (Just query) = tatval alphai x
+tPosterior prior sample  = (pdfFun, mui)
   where
-    x =  (query - mui) / tstdev
+    pdfFun (Just query) = tatval alphai ((query - mui) / tstdev)
+    pdfFun Nothing = 1
     tstdev = sigmai * (sqrt (1 + (1/lambdai)))
     sigmai = sqrt $ (alpha0*(sq sigma0) + 
                       (n-1)*variance +
@@ -47,14 +46,17 @@ tPosterior prior sample (Just query) = tatval alphai x
     n = fromIntegral $ length sample
     (mu0, sigma0, alpha0, lambda0) = prior
 
--- Multinomial values must be in the set [0..n-1] where n is the number of
+-- Binomial values must be in the set [0..n-1] where n is the number of
 -- possible values.
-multinomialPosterior :: [Double] -> PDFFromSample
-multinomialPosterior _ _ Nothing = 1
-multinomialPosterior alphas sample (Just query) = (cj + alphas!!(floor query)) / (n + alpha0)
+binomialPosterior :: [Double] -> PDFFromSample
+binomialPosterior alphas sample = (pdfFun, pdfFun (Just 1))
   where
-    cj = fromIntegral $ length $ filter (==query) sample
-    n = fromIntegral $ length sample
+    pdfFun Nothing = 1
+    pdfFun (Just query) = (cj + alphas!!(floor query)) / (n + alpha0)
+      where
+        cj = (fromIntegral . length . (filter (==query))) sample
+    n = sum ns
+    ns = map (fromIntegral . length) $ groupsortBy id sample
     alpha0 = sum alphas
 
 -- Takes a list of assignments (assumed to be consecutive ints) and returns the

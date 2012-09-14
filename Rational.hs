@@ -3,6 +3,8 @@ module Rational (
                  dropByIndex,
                  replaceAtIndex,
                  clusterPosterior,
+                 clusterItems,
+                 infer,
                  Stim,
                  Partition
                 ) where
@@ -11,7 +13,7 @@ import Data.List (nub, group, groupBy, transpose, sortBy, splitAt)
 import Data.Function (on)
 import Data.Maybe
 
-import JohnFuns (debug)
+import JohnFuns
 import Stats
 
 -- * Convenience functions
@@ -45,6 +47,13 @@ dropAssignment assignments i
     assignDropped = replaceAtIndex i Nothing assignments
     clust         = fromJust $ assignments!!i
 
+clusterItems :: Partition -> [Stim] -> [[Stim]]
+clusterItems = curry (takeStims . groupByClust . takeIncluded . (uncurry zip))
+  where
+    takeStims = map (map snd)
+    groupByClust = groupsortBy fst
+    takeIncluded = filter (isJust . fst)
+
 -- Likelihood that a stimulus belongs to each cluster
 clusterPosterior :: ClusterPrior -> [PDFFromSample] -> [Stim] -> Partition -> Stim -> [Double]
 clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) posterior
@@ -54,9 +63,19 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
     -- NOTE: watch out that the stim to be assigned isn't assigned in assignments.
     clustPriors = cprior (catMaybes assignments)
     clustLikelihoods = map clustLik clusts ++ [emptyClustLik]
-    clustLik clust = product $ zipWith3 (\dist sample query -> dist (catMaybes sample) query ) distributions (transpose clust) newstim
-    emptyClustLik = product $ zipWith3 (\dist sample query -> dist sample query ) distributions (replicate stimlength []) newstim
-    clusts = map (map snd) $ gatherBy fst $ filter (isJust . fst) $ (zip assignments stimuli)
+    clustLik clust = product $ zipWith3 (\dist sample query -> (fst . dist) (catMaybes sample) query ) distributions (transpose clust) newstim
+    emptyClustLik = product $ zipWith (\dist query -> (fst . dist) [] query) distributions newstim
+    clusts = clusterItems assignments stimuli
     stimlength = (length . head) stimuli
 
+-- | For all missing items in the querystim, infers the most likely possible
+-- | outcome, taking all possible cluster assignments into account.
+infer :: ClusterPrior -> [PDFFromSample] -> [Stim] -> Partition -> Stim -> [Double]
+infer cprior distributions stimuli assignments querystim = map inferDim querydims
+  where
+    inferDim i = sum $ zipWith (*) post (clustPreds!!i)
+    clustPreds = debug $ transpose $ map ((zipWith (\d c -> (snd . d . catMaybes) c) distributions) . transpose) clusters
+    clusters = clusterItems assignments stimuli
+    querydims = map snd $ filter (isNothing . fst) $ zip querystim [0..]
+    post = clusterPosterior cprior distributions stimuli assignments querystim
 

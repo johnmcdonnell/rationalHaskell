@@ -1,7 +1,6 @@
 
 module JohnFuns 
     (
-    (=.<),
     groupsortBy,
     debug,
     debugMessage
@@ -10,6 +9,8 @@ module JohnFuns
 import qualified Data.List as L
 import Debug.Trace
 import Data.Function (on)
+import Data.Typeable (Typeable, cast)
+import Data.Maybe (fromMaybe)
 
 -- | Unsafe IO, just spits out the argument.
 debug v = traceShow v v
@@ -22,7 +23,7 @@ debugMessage message v = trace (message ++ show v) v
 groupsortBy :: Ord b => (a -> b) -> [a] -> [[a]]
 groupsortBy func = L.groupBy ((==) `on` func) . (L.sortBy (compare `on` func))
 
--- |infix version of fmap.
-infixr 9 =.<
-a =.< f = fmap f a
+-- | Casting 
 
+-- toString :: Show a => a -> String
+-- toString
