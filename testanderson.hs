@@ -165,10 +165,11 @@ testZeithamova = do
 
 testTVTask = do
     args <- getArgs
-    let cparam = if length args > 0 then read (head args) else 1
+    let cparam = if length args > 0 then read (args!!0) else 1
+    let nlab = if length args > 1 then read (args!!1) else 16
     
     -- Set up priors
-    (task, distpriors) <- mcdonnellTask (1, 1) (28*8) 32
+    (task, distpriors) <- mcdonnellTask (1, 1) (28*4) nlab
     -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
     
     let prior  = (dirichletProcess cparam, distpriors)

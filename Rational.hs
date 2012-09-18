@@ -74,7 +74,7 @@ infer :: ClusterPrior -> [PDFFromSample] -> [Stim] -> Partition -> Stim -> [Doub
 infer cprior distributions stimuli assignments querystim = map inferDim querydims
   where
     inferDim i = sum $ zipWith (*) post (clustPreds!!i)
-    clustPreds = debug $ transpose $ map ((zipWith (\d c -> (snd . d . catMaybes) c) distributions) . transpose) clusters
+    clustPreds = transpose $ map ((zipWith (\d c -> (snd . d . catMaybes) c) distributions) . transpose) clusters
     clusters = clusterItems assignments stimuli
     querydims = map snd $ filter (isNothing . fst) $ zip querystim [0..]
     post = clusterPosterior cprior distributions stimuli assignments querystim
