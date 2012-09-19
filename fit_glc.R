@@ -112,7 +112,7 @@ fits.table <- function(df, withplot=F) {
         }
         model.fit
     }
-    glc.fits <- llply( model.formulas, fit.glc o
+    glc.fits <- llply( model.formulas, fit.glc )
     
     # Record oned coeffs # TODO may not be working
     unimodcoeff <- glc.fits$Unimodal$par$coeffs
@@ -215,8 +215,8 @@ simulate_anderson <- function(cparam=1, nlab=16, tau=.05, plotting=F, echo=F) {
 nreps <- 100
 sims <- data.frame()
 for (nlab in c(4,16)) {
-  for (cparam in c(.6, 1, 2)) {
-    for( tau in c(.05, .5) ) {
+  for (cparam in c(.25, .5, .75, 1)) {
+    for( tau in c(.01, .05, .125, .25) ) {
       for (rep in 1:nreps) {
         this_sim <- try(simulate_anderson(cparam, nlab, tau, plotting=F))
         if (class(this_sim) == "try-error") next
@@ -228,7 +228,14 @@ for (nlab in c(4,16)) {
   }
 }
 write.csv(sims, file="sims.csv")
+# }}}1
 
+# {{{1 Read the sim results
+counts <- ddply( sims, .(nlab, cparam, tau), function(x) summary(x$BestFit) )
+counts$ratio <- counts$Bimodal/counts$"2D"
+counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
+
+ggplot(counts) + geom_line(aes(x=nlab, y=ratio, group=params, linetype=factor(tau), colour=factor(cparam)))
 # }}}1
 
 # vim: foldmethod=marker
