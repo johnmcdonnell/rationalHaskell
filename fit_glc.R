@@ -166,7 +166,6 @@ fits.table <- function(df, withplot=F) {
 
 # {{{1 Reading in sims
 # {{{2 Params
-tau <- .05
 # }}}2
 #
 # Softmax, chooses true or false given a fixed probably of false
@@ -184,8 +183,8 @@ run_anderson_once <- function(...) {
 # }}}1
 
 # {{{1 Simulation code
-simulate_anderson <- function(cparam=1, nlab=16, tau=.05, plotting=F, echo=F) {
-  resps <- run_anderson_once(cparam, nlab)
+simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", tau=.05, plotting=F, echo=F) {
+  resps <- run_anderson_once(cparam, nlab, order)
   inferences <- subset(resps, type=="INFER")
   inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
   if (echo) { print( inferences) }
@@ -207,35 +206,60 @@ simulate_anderson <- function(cparam=1, nlab=16, tau=.05, plotting=F, echo=F) {
   inferences$order <- "interspersed"
   inferences$nlab <- nlab
   
-  print(fits.table(inferences))
+  fits.table(inferences)
 }
-# }}}1
 
-# {{{1 Run the sims
-nreps <- 100
-sims <- data.frame()
-for (nlab in c(4,16)) {
-  for (cparam in c(.25, .5, .75, 1)) {
-    for( tau in c(.01, .05, .125, .25) ) {
-      for (rep in 1:nreps) {
-        this_sim <- try(simulate_anderson(cparam, nlab, tau, plotting=F))
-        if (class(this_sim) == "try-error") next
-        this_sim$tau <- tau
-        this_sim$cparam <- cparam
-        sims <- rbind(sims, this_sim)
+library(foreach)
+library(doMC)
+registerDoMC()
+
+run_sims <- function() {
+  nlabs <- c(2,4,8,16)
+  orders <- c("interspersed", "labfirst", "lablast")
+  cparams <- c(1.6, .7/.3, 4)
+  taus <- c(.01, .05, .125)
+  nreps <- 1000
+  
+  ntotal <- nreps * length(orders) * length(nlabs) * length(cparams) * length(taus)
+  pb <- txtProgressBar(min=0, max=ntotal, style=3)
+  count <- 0
+  
+  all_sims <- data.frame()
+  for (order in orders) {
+    for (nlab in nlabs) {
+      for (cparam in cparams) {
+        for( tau in taus ) {
+          sims <- foreach (rep=1:nreps, .combine=rbind) %dopar% {
+            this_sim <- try(simulate_anderson(cparam, nlab, order, tau, plotting=F))
+            if (class(this_sim) == "try-error") data.frame()
+            else {
+              this_sim$tau <- tau
+              this_sim$cparam <- cparam
+              this_sim
+            }
+          }
+          all_sims <- rbind(all_sims, sims)
+          count <- count + nreps
+          setTxtProgressBar(pb, count)
+        }
       }
     }
   }
+  write.csv(all_sims, file="sims.csv")
+  all_sims
 }
-write.csv(sims, file="sims.csv")
 # }}}1
 
 # {{{1 Read the sim results
+#sims <- read.table("sims.csv")
+sims <- run_sims()
+print(summary(sims$BestFit))
 counts <- ddply( sims, .(nlab, cparam, tau), function(x) summary(x$BestFit) )
 counts$ratio <- counts$Bimodal/counts$"2D"
 counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
 
-ggplot(counts) + geom_line(aes(x=nlab, y=ratio, group=params, linetype=factor(tau), colour=factor(cparam)))
+counts$twod <- counts$"2D"
+print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))))
 # }}}1
 
 # vim: foldmethod=marker

@@ -4,6 +4,7 @@ import Data.List (sortBy, transpose)
 import Data.Function (on)
 import Data.Maybe
 import Control.Applicative
+import Control.Arrow
 import Control.Monad
 import Control.Monad.Random
 import System.Environment (getArgs)
@@ -135,11 +136,34 @@ mcdonnellTask (contalpha, contlambda) n nlab = do
     let binomprior =  binomialPosterior [1, 1]
     return (shuffledstims, tpriors ++ [binomprior])
 
+
+labfirstcompare :: Ord a => Maybe a -> Maybe a -> Ordering
+labfirstcompare (Just _)  (Nothing) = LT
+labfirstcompare (Nothing) (Just _)  = GT
+labfirstcompare _         _         = EQ
+
+lablastcompare :: Ord a => Maybe a -> Maybe a -> Ordering
+lablastcompare (Nothing) (Just _)  = LT
+lablastcompare (Just _)  (Nothing) = GT
+lablastcompare _         _         = EQ
+
+data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show)
+
+mcdonnellTaskOrdered :: SortOrder -> (Double, Double) -> Int -> Int -> IO ([Stim], [PDFFromSample])
+mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = (first orderfun) <$> (mcdonnellTask (contalpha, contlambda) n nlab)
+-- mcdonnellTaskOrdered order = (first (orderfun . last)) <$> mcdonnellTask
+  where
+    orderfun = case order of 
+                      Interspersed -> id
+                      LabeledFirst -> sortBy (\x y ->  labfirstcompare (last x) (last y))
+                      LabeledLast  -> sortBy (\x y ->  lablastcompare (last x) (last y))
+
 runGridTest :: ClusterPrior -> [PDFFromSample] -> [Stim] -> Partition -> [(Stim, Double)]
 runGridTest cprior distributions stimuli assignments = zip grid labels
   where 
     labels = map head $ map (infer cprior distributions stimuli assignments) grid
     grid = (\x y -> [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
+
 
 testContinuous = do
     let mu1 = 1
@@ -167,9 +191,16 @@ testTVTask = do
     args <- getArgs
     let cparam = if length args > 0 then read (args!!0) else 1
     let nlab = if length args > 1 then read (args!!1) else 16
+    let orderarg = if length args > 2 then (args!!2) else "interspersed"
+    
+    let order = case orderarg of "interspersed" -> Interspersed
+                                 "labfirst"     -> LabeledFirst
+                                 "lablast"      -> LabeledLast
+                                 otherwise      -> error $ "Inappropriate order: " ++ orderarg ++ "; order should be one of interspersed, labfirst, lablast."
+    print $ "Order was " ++ show order;
     
     -- Set up priors
-    (task, distpriors) <- mcdonnellTask (1, 1) (28*4) nlab
+    (task, distpriors) <- mcdonnellTaskOrdered order (1, 1) (28*4) nlab
     -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
     
     let prior  = (dirichletProcess cparam, distpriors)
