@@ -52,7 +52,7 @@ medinSchafferTask binomAlphas = (medinSchafferStims, andersondists)
 testMedinSchaffer = do
     let (task, dists) = medinSchafferTask [1,1]
     let couplingParam = dirichletProcess 1.0
-    andersonSample (couplingParam, dists) task
+    andersonSample EncodeActual (couplingParam, dists) task
 
 onedtask :: [(Double, Double)] -> Int -> IO (Stims, [PDFFromSample])
 onedtask params n = do
@@ -161,14 +161,14 @@ testContinuous = do
     (task, distpriors) <- twodtask [(mu1, sigma1), (mu2, sigma2)] n
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    let partition = andersonSample prior task
+    let partition = andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 testZeithamova = do
     (task, distpriors) <- zeithamovaMaddox (1, 1) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    let partition = andersonSample prior task
+    let partition = andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 testTVTask = do
@@ -190,7 +190,7 @@ testTVTask = do
     let prior  = (dirichletProcess cparam, distpriors)
     
     -- Now run the model
-    let partition = andersonSampleEncodeguess prior task
+    let partition = andersonSample EncodeGuess prior task
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))

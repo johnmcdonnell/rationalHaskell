@@ -1,6 +1,6 @@
 
 module Anderson (andersonSample,
-                andersonSampleEncodeguess) where
+                Encoding (EncodeActual, EncodeGuess)) where
 
 import Data.Function
 import Data.List
@@ -26,37 +26,45 @@ sampleNext (clusterPrior, distributions) stimuli assignments newstim = assignmen
     assignment = (V.maxIndex . V.fromList) posterior
     posterior = clusterPosterior clusterPrior distributions stimuli assignments newstim
 
-andersonSample :: (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
-               -> Stims                     -- ^ Task stimuli
-               -> Partition
-andersonSample prior stimuli = runST $ do
-    let n = V.length stimuli
-    assignmentStore <- VM.replicate n Nothing
-    V.forM_ (V.indexed stimuli) (\(i, newstim) -> do
-        assignments <- V.freeze assignmentStore
-        let chosenclust = sampleNext prior stimuli assignments newstim
-        VM.write assignmentStore i (Just chosenclust)
-        )
-    V.freeze assignmentStore
+-- andersonSample :: (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
+--                -> Stims                     -- ^ Task stimuli
+--                -> Partition
+-- andersonSample prior stimuli = runST $ do
+--     let n = V.length stimuli
+--     assignmentStore <- VM.replicate n Nothing
+--     V.forM_ (V.indexed stimuli) (\(i, newstim) -> do
+--         assignments <- V.freeze assignmentStore
+--         let chosenclust = sampleNext prior stimuli assignments newstim
+--         VM.write assignmentStore i (Just chosenclust)
+--         )
+--     V.freeze assignmentStore
 
+encodeActual :: Stim -> [Double] -> Stim
+encodeActual newstim guess = newstim
 
-andersonIterate :: (ClusterPrior, [PDFFromSample]) -> (Partition, Stims) -> (Int, Stim) -> (Partition, Stims)
-andersonIterate prior (assignments, stims) (i, newstim) = (retAssign, retStims)
+encodeGuess :: Stim -> [Double] -> Stim
+encodeGuess newstim guess = case guess of [x] -> V.snoc (V.init newstim) (if x>0.5 then Just 1 else (if x<0.5 then Just 0 else Nothing))
+                                          otherwise -> newstim
+data Encoding = EncodeActual | EncodeGuess
+
+andersonIterate :: (ClusterPrior, [PDFFromSample]) -> Encoding -> (Partition, Stims) -> (Int, Stim) -> (Partition, Stims)
+andersonIterate prior encoding (assignments, stims) (i, newstim) = (retAssign, retStims)
   where
     retStims = V.snoc stims encodestim -- TODO would be better in place.
     retAssign = V.modify (\vec -> VM.unsafeWrite vec i (Just chosenclust)) assignments
     chosenclust = sampleNext prior stims assignments encodestim
-    encodestim = case guess of [x] -> V.snoc (V.init newstim) (if x>0.5 then Just 1 else (if x<0.5 then Just 0 else Nothing))
-                               otherwise -> newstim
+    encodestim = (encodefun newstim guess)
     guess = infer (fst prior) (snd prior) stims assignments newstim
+    encodefun = case encoding of EncodeGuess -> encodeGuess
+                                 EncodeActual -> encodeActual
 
-
-andersonSampleEncodeguess :: (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
-                            -> Stims                     -- ^ Task stimuli
-                            -> Partition
-andersonSampleEncodeguess prior stimuli = finalAssign
+andersonSample ::    Encoding                  -- ^ How to encode items (Use guess or not)
+                 -> (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
+                 -> Stims                     -- ^ Task stimuli
+                 -> Partition
+andersonSample encoding prior stimuli = finalAssign
   where
-    (finalAssign, finalStims) = V.foldl' (andersonIterate prior) (assignmentStore, stimStore) (V.indexed stimuli)
+    (finalAssign, finalStims) = V.foldl' (andersonIterate prior encoding) (assignmentStore, stimStore) (V.indexed stimuli)
     assignmentStore = V.replicate n Nothing
     stimStore = V.empty
     n = V.length stimuli
