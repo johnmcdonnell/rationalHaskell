@@ -4,7 +4,6 @@ library(grt)
 library(ggplot2)
 library(plyr)
 
-theme_set( theme_bw() )
 # }}}1
 
 #
@@ -216,9 +215,9 @@ registerDoMC()
 run_sims <- function() {
   nlabs <- c(2,4,8,16)
   orders <- c("interspersed", "labfirst", "lablast")
-  cparams <- c(1.6, .7/.3, 4)
-  taus <- c(.01, .05, .125)
-  nreps <- 1000
+  cparams <- c(.7, 1, .7/.3)
+  taus <- c(.05)
+  nreps <- 2000
   
   ntotal <- nreps * length(orders) * length(nlabs) * length(cparams) * length(taus)
   pb <- txtProgressBar(min=0, max=ntotal, style=3)
@@ -235,6 +234,7 @@ run_sims <- function() {
             else {
               this_sim$tau <- tau
               this_sim$cparam <- cparam
+              this_sim$order <- order
               this_sim
             }
           }
@@ -254,12 +254,17 @@ run_sims <- function() {
 #sims <- read.table("sims.csv")
 sims <- run_sims()
 print(summary(sims$BestFit))
-counts <- ddply( sims, .(nlab, cparam, tau), function(x) summary(x$BestFit) )
+counts <- ddply( sims, .(nlab, cparam, tau, order), function(x) summary(x$BestFit) )
 counts$ratio <- counts$Bimodal/counts$"2D"
 counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
 
 counts$twod <- counts$"2D"
-print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))))
+print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))) + facet_wrap(~order))
+
+examining <- subset( counts, tau==.05 )
+examining <- melt(examining, id=c("nlab", "cparam", "tau", "order"), measure.vars=c("twod", "Bimodal", "Unimodal", "Null"), variable.name="bestfit",  value.name="count" )
+
+ggplot(examining) + geom_line(aes(x=factor(nlab), y=count, group=bestfit, colour=bestfit)) + facet_grid(cparam~order)
 # }}}1
 
 # vim: foldmethod=marker
