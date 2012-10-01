@@ -182,8 +182,8 @@ run_anderson_once <- function(...) {
 # }}}1
 
 # {{{1 Simulation code
-simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", tau=.05, plotting=F, echo=F) {
-  resps <- run_anderson_once(cparam, nlab, order)
+simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", tau=.05, plotting=F, echo=F) {
+  resps <- run_anderson_once(cparam, nlab, order, encoding)
   inferences <- subset(resps, type=="INFER")
   inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
   if (echo) { print( inferences) }
@@ -202,8 +202,9 @@ simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", tau=.05, 
   
   # Prepping for use in fits.table
   inferences$alllab <- "false"
-  inferences$order <- "interspersed"
+  inferences$order <- order
   inferences$nlab <- nlab
+  inferences$encoding <- encoding
   
   fits.table(inferences)
 }
@@ -213,38 +214,33 @@ library(doMC)
 registerDoMC()
 
 run_sims <- function() {
-  nlabs <- c(2,4,8,16)
-  orders <- c("interspersed", "labfirst", "lablast")
-  cparams <- c(.7, 1, .7/.3)
-  taus <- c(.05)
+  runs <- expand.grid(nlab=c(2,4,8,16), 
+                      order=c("interspersed", "labfirst", "lablast"),
+                      cparam=c(.7, 1, .7/.3),
+                      tau=c(.05), 
+                      encoding=c("actual", "guess"))
+  runs <- subset( runs, ! (encoding=="guess" & order!="interspersed"))
   nreps <- 2000
   
-  ntotal <- nreps * length(orders) * length(nlabs) * length(cparams) * length(taus)
-  pb <- txtProgressBar(min=0, max=ntotal, style=3)
-  count <- 0
+  #ntotal <- nrow(runs) * nreps
+  #pb <- txtProgressBar(min=0, max=ntotal, style=3)
+  #count <- 0
   
-  all_sims <- data.frame()
-  for (order in orders) {
-    for (nlab in nlabs) {
-      for (cparam in cparams) {
-        for( tau in taus ) {
-          sims <- foreach (rep=1:nreps, .combine=rbind) %dopar% {
-            this_sim <- try(simulate_anderson(cparam, nlab, order, tau, plotting=F))
-            if (class(this_sim) == "try-error") data.frame()
-            else {
-              this_sim$tau <- tau
-              this_sim$cparam <- cparam
-              this_sim$order <- order
-              this_sim
+  all_sims <- ddply(runs, names(runs), function(df) {
+            attach(df[1,]) # Yes yes I know attaching is a dirty dirty thing to do.
+            count <- 0
+            ret <- data.frame()
+            while ( count < nreps ) {
+              this_sim <- try(simulate_anderson(cparam, nlab, order, encoding, tau, plotting=F))
+              if (class(this_sim) == "try-error") next # Sometimes the call fails.
+              count <- count + 1
+              ret <- rbind( ret, this_sim )
             }
-          }
-          all_sims <- rbind(all_sims, sims)
-          count <- count + nreps
-          setTxtProgressBar(pb, count)
-        }
-      }
-    }
-  }
+            ret
+            #count <- count + nreps
+            #setTxtProgressBar(pb, count)
+                      }, .parallel=T)
+  
   write.csv(all_sims, file="sims.csv")
   all_sims
 }
@@ -254,17 +250,26 @@ run_sims <- function() {
 #sims <- read.table("sims.csv")
 sims <- run_sims()
 print(summary(sims$BestFit))
-counts <- ddply( sims, .(nlab, cparam, tau, order), function(x) summary(x$BestFit) )
+
+counts <- ddply( sims, .(nlab, cparam, tau, order, encoding), function(x) summary(x$BestFit) )
 counts$ratio <- counts$Bimodal/counts$"2D"
 counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
 
 counts$twod <- counts$"2D"
-print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))) + facet_wrap(~order))
+#print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))) + facet_wrap(~order))
 
 examining <- subset( counts, tau==.05 )
-examining <- melt(examining, id=c("nlab", "cparam", "tau", "order"), measure.vars=c("twod", "Bimodal", "Unimodal", "Null"), variable.name="bestfit",  value.name="count" )
+examining <- melt(examining,
+                  id=c("nlab", "cparam", "tau", "order", "encoding"),
+                  measure.vars=c("twod", "Bimodal", "Unimodal", "Null"),
+                  variable.name="bestfit",
+                  value.name="count")
 
-ggplot(examining) + geom_line(aes(x=factor(nlab), y=count, group=bestfit, colour=bestfit)) + facet_grid(cparam~order)
+examining$groupingparam <- do.call(paste, c(examining[c("bestfit", "encoding")], sep = ":"))
+
+print(ggplot(examining) +
+      geom_line(aes(x=factor(nlab), y=count, group=groupingparam, linetype=encoding, colour=bestfit)) + 
+      facet_grid(cparam~order))
 # }}}1
 
 # vim: foldmethod=marker

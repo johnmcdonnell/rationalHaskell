@@ -176,11 +176,14 @@ testTVTask = do
     let cparam = if length args > 0 then read (args!!0) else 1
     let nlab = if length args > 1 then read (args!!1) else 16
     let orderarg = if length args > 2 then (args!!2) else "interspersed"
+    let encodearg = if length args > 3 then (args!!3) else "actual"
     
     let order = case orderarg of "interspersed" -> Interspersed
                                  "labfirst"     -> LabeledFirst
                                  "lablast"      -> LabeledLast
                                  otherwise      -> error $ "Inappropriate order: " ++ orderarg ++ "; order should be one of interspersed, labfirst, lablast."
+    let encoding = case encodearg of "guess" -> EncodeGuess
+                                     otherwise -> EncodeActual
     print $ "Order was " ++ show order;
     
     -- Set up priors
@@ -190,7 +193,7 @@ testTVTask = do
     let prior  = (dirichletProcess cparam, distpriors)
     
     -- Now run the model
-    let partition = andersonSample EncodeGuess prior task
+    let partition = andersonSample encoding prior task
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
