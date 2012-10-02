@@ -174,7 +174,9 @@ testZeithamova = do
 testTVTask = do
     args <- getArgs
     let cparam = if length args > 0 then read (args!!0) else 1
-    let nlab = if length args > 1 then read (args!!1) else 16
+    let maxlab = 16
+    let (nlab, nounlab) = if length args > 1 then (\x -> if x<0 then (maxlab, True) else (x, False) ) $ read (args!!1) 
+                                             else (maxlab, False)
     let orderarg = if length args > 2 then (args!!2) else "interspersed"
     let encodearg = if length args > 3 then (args!!3) else "actual"
     
@@ -187,7 +189,10 @@ testTVTask = do
     print $ "Order was " ++ show order;
     
     -- Set up priors
-    (task, distpriors) <- mcdonnellTaskOrdered order (1, 1) (28*4) nlab
+    (task', distpriors) <- mcdonnellTaskOrdered order (1, 1) (28*4) nlab
+    let task = if nounlab then V.map (\stim -> case (V.last) stim of Nothing -> V.replicate (V.length stim) Nothing
+                                                                     otherwise -> stim) task'
+                          else task'
     -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
     
     let prior  = (dirichletProcess cparam, distpriors)
