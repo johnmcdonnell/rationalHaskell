@@ -190,10 +190,8 @@ testTVTask = do
     print $ "Order was " ++ show order;
     
     -- Set up priors
-    (task', distpriors) <- mcdonnellTaskOrdered order (1, 1) (28*4) nlab
-    let task = if nounlab then V.map (\stim -> case (V.last) stim of Nothing -> V.replicate (V.length stim) Nothing
-                                                                     otherwise -> stim) task'
-                          else task'
+    let filterfun = if nounlab then V.filter (isJust . V.last) else id
+    (task, distpriors) <- first filterfun <$> mcdonnellTaskOrdered order (1, 1) (28*4) nlab
     -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
     
     let prior  = (dirichletProcess cparam, distpriors)
