@@ -3,6 +3,7 @@
 library(grt)
 library(ggplot2)
 library(plyr)
+library(reshape2)
 
 # }}}1
 
@@ -214,7 +215,7 @@ library(doMC)
 registerDoMC()
 
 run_sims <- function() {
-  runs <- expand.grid(nlab=c(2,4,8,16), 
+  runs <- expand.grid(nlab=c(-1, 2,4,8,16), 
                       order=c("interspersed", "labfirst", "lablast"),
                       cparam=c(.7, 1, .7/.3),
                       tau=c(.05), 
@@ -247,7 +248,7 @@ run_sims <- function() {
 # }}}1
 
 # {{{1 Read the sim results
-#sims <- read.table("sims.csv")
+#sims <- read.csv("sims.csv")
 sims <- run_sims()
 print(summary(sims$BestFit))
 
