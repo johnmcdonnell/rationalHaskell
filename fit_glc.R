@@ -5,6 +5,9 @@ library(ggplot2)
 library(plyr)
 library(reshape2)
 
+library(foreach)
+library(doMC)
+registerDoMC()
 # }}}1
 
 #
@@ -210,19 +213,18 @@ simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding=
   fits.table(inferences)
 }
 
-library(foreach)
-library(doMC)
-registerDoMC()
+plot_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", tau=.05, plotting=F, echo=F) {
+  resps <- run_anderson_once(cparam, nlab, order, encoding)
+  stims <- subset(resps, type=="STIM")
+  stims <- subset(stims, bimod>0 & unimod>0 ) # Remove unlabeld
+  if (length(unique(stims$label)) == 3) labels <- c("unlabeled", "ch1", "ch2")
+  else if (length(unique(stims$label)) == 2) labels <- c("ch1", "ch2")
+  else if (length(unique(stims$label)) == 1) labels <- c("unlabeled")
+  stims$label <- factor(stims$label, labels=labels)
+  ggplot(stims) + geom_point( aes(y=unimod, x=bimod, colour=label, size=2) )
+}
 
-run_sims <- function() {
-  runs <- expand.grid(nlab=c(-1, 2,4,8,16), 
-                      order=c("interspersed", "labfirst", "lablast"),
-                      cparam=c(.7, 1, .7/.3),
-                      tau=c(.05), 
-                      encoding=c("actual", "guess", "softguess"))
-  runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
-  nreps <- 2000
-  
+run_sims <- function(runs, nreps) {
   #ntotal <- nrow(runs) * nreps
   #pb <- txtProgressBar(min=0, max=ntotal, style=3)
   #count <- 0
@@ -249,7 +251,15 @@ run_sims <- function() {
 
 # {{{1 Read the sim results
 #sims <- read.csv("sims.csv")
-sims <- run_sims()
+runs <- expand.grid(nlab=c(-1), 
+                    order=c("interspersed", "labfirst", "lablast"),
+                    cparam=c(1, 1.8, .7/.3),
+                    tau=c(.05), 
+                    encoding=c("actual"))
+runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
+
+nreps <- 300
+sims <- run_sims(runs, nreps)
 print(summary(sims$BestFit))
 
 counts <- ddply( sims, .(nlab, cparam, tau, order, encoding), function(x) summary(x$BestFit) )
@@ -259,8 +269,7 @@ counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
 counts$twod <- counts$"2D"
 #print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))) + facet_wrap(~order))
 
-examining <- subset( counts, tau==.05 )
-examining <- melt(examining,
+examining <- melt(counts,
                   id=c("nlab", "cparam", "tau", "order", "encoding"),
                   measure.vars=c("twod", "Bimodal", "Unimodal", "Null"),
                   variable.name="bestfit",

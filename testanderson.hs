@@ -18,8 +18,6 @@ import Text.CSV
 
 import Math.Statistics
 
-import Graphics.Gnuplot.Simple
-
 import JohnFuns
 import Random
 
@@ -28,9 +26,6 @@ import Rational
 import Anderson
 
 -- Convenience functions
-
--- plotpoints :: [(Double, Double)] -> IO ()
--- plotpoints = plotListStyle [] defaultStyle{ plotType=Dots }
 
 
 -- Science etc
@@ -207,11 +202,6 @@ testTVTask = do
     
     -- Print it out
     putStrLn $ printCSV $ map ("STIM":) resultstrings
-    
-    -- Plot it
-    --let grouped = map (map (\([x,y,_],_) -> (x,y))) $ groupsortBy snd results
-    -- plotListsStyle [] $ map (\x -> (defaultStyle {plotType = Dots, lineSpec = CustomStyle [PointType 5]}, x)) grouped
-    --plotListsStyle [LineStyle 1 [PointType 1, PointSize 0.8]] $ map (\x -> (defaultStyle {plotType = Dots}, x)) grouped
     
     -- Get inference at each point in a grid
     putStrLn $ printCSV $ map (("INFER":) . (map show) . \(stim, resp) -> (take 2 . V.toList . demabify) stim ++ [resp] ) $ V.toList $ (uncurry runGridTest) prior task partition
