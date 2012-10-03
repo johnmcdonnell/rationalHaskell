@@ -161,14 +161,14 @@ testContinuous = do
     (task, distpriors) <- twodtask [(mu1, sigma1), (mu2, sigma2)] n
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    let partition = andersonSample EncodeActual prior task
+    partition <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 testZeithamova = do
     (task, distpriors) <- zeithamovaMaddox (1, 1) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    let partition = andersonSample EncodeActual prior task
+    partition <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 testTVTask = do
@@ -183,6 +183,7 @@ testTVTask = do
                                  "lablast"      -> LabeledLast
                                  otherwise      -> error $ "Inappropriate order: " ++ orderarg ++ "; order should be one of interspersed, labfirst, lablast."
     let encoding = case encodearg of "guess" -> EncodeGuess
+                                     "softguess" -> EncodeGuessSoft
                                      otherwise -> EncodeActual
     print $ "Order was " ++ show order;
     
@@ -193,7 +194,7 @@ testTVTask = do
     let prior  = (dirichletProcess cparam, distpriors)
     
     -- Now run the model
-    let partition = andersonSample encoding prior task
+    partition <- evalRandIO $ andersonSample encoding prior task
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))

@@ -218,8 +218,8 @@ run_sims <- function() {
                       order=c("interspersed", "labfirst", "lablast"),
                       cparam=c(.7, 1, .7/.3),
                       tau=c(.05), 
-                      encoding=c("actual", "guess"))
-  runs <- subset( runs, ! (encoding=="guess" & order!="interspersed"))
+                      encoding=c("actual", "guess", "softguess"))
+  runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
   nreps <- 2000
   
   #ntotal <- nrow(runs) * nreps
@@ -269,7 +269,8 @@ examining$groupingparam <- do.call(paste, c(examining[c("bestfit", "encoding")],
 
 print(ggplot(examining) +
       geom_line(aes(x=factor(nlab), y=count, group=groupingparam, linetype=encoding, colour=bestfit)) + 
-      facet_grid(cparam~order))
+      facet_grid(cparam~order, labeller=label_both) +
+      labs(title="2000 simulated runs of the Anderson Rational model"))
 # }}}1
 
 # vim: foldmethod=marker
