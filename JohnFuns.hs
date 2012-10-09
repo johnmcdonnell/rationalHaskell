@@ -8,7 +8,8 @@ module JohnFuns
     safetail,
     gatherBy,
     gather,
-    vectranspose
+    vectranspose,
+    catMaybeV
     ) where
 
 import qualified Data.List as List
@@ -18,7 +19,7 @@ import Data.Vector (Vector, (!))
 import Debug.Trace
 import Data.Function (on)
 import Data.Typeable (Typeable, cast)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust, isJust)
 
 -- * Unsafe IO for 
 
@@ -60,5 +61,9 @@ vectranspose mindim vec
   where
     cols = (V.length . V.head) vec
     rows = V.length vec
+
+-- Vector of the Just values
+catMaybeV :: Vector (Maybe a) -> Vector a
+catMaybeV = (V.map fromJust) . (V.filter isJust)
 
 

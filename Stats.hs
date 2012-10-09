@@ -73,4 +73,3 @@ dirichletProcess alpha assignments = pPartitions ++ [pNew]
     counts = map length $ (group . sort) assignments
     n = fromIntegral $ length assignments
 
-

@@ -202,6 +202,8 @@ testTVTask = do
     -- Print it out
     putStrLn $ printCSV $ map ("STIM":) resultstrings
     
+    putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
+    
     -- Get inference at each point in a grid
     putStrLn $ printCSV $ map (("INFER":) . (map show) . \(stim, resp) -> (take 2 . V.toList . demabify) stim ++ [resp] ) $ V.toList $ (uncurry runGridTest) prior task partition
 

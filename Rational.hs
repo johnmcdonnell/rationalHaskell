@@ -6,7 +6,9 @@ module Rational (
                  infer,
                  Stim,
                  Stims,
-                 Partition
+                 Partition,
+                 clusterPredictions,
+                 summarizeClusters
                 ) where
 
 import Data.List (nub, group, groupBy, transpose, sortBy, splitAt)
@@ -19,6 +21,7 @@ import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
+import Statistics.Sample
 
 import JohnFuns
 import Stats
@@ -53,10 +56,16 @@ clusterItems :: Partition -> Stims -> [Stims]
 clusterItems assignments stims = takeWhile (not . V.null) clusters
   where
     clusters = map (\i-> V.map (stims!) $ V.elemIndices (Just i) assignments) [0..]
-    
 
+-- | Predictions for each cluster
+clusterPredictions :: [PDFFromSample] -> Stims -> [Double]
+clusterPredictions pdfs stims = zipWith distSummary pdfs dims
+  where
+    distSummary dist = snd . dist . catMaybeV
+    dims = V.toList $ vectranspose ndims stims 
+    ndims = V.length $ V.head stims
 
--- Likelihood that a stimulus belongs to each cluster
+-- | Likelihood that a stimulus belongs to each cluster
 clusterPosterior :: ClusterPrior -> [PDFFromSample] -> Stims -> Partition -> Stim -> [Double]
 clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) posterior
   where
@@ -77,29 +86,17 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
 infer :: ClusterPrior -> [PDFFromSample] -> Stims -> Partition -> Stim -> [Double]
 infer cprior distributions stimuli assignments querystim = map inferDim querydims
   where
-    inferDim i = V.sum $ V.zipWith (*) post (clustPreds!i)
-    clustPreds = vectranspose ndim $ V.map (V.fromList . (zipWith distSummary distributions) . V.toList . (vectranspose ndim)) clusters
-    distSummary dist = snd . dist . V.map fromJust . V.filter isJust
-    clusters = V.fromList $ clusterItems assignments stimuli
+    inferDim i = sum $ (zipWith (*) post) (clustPreds!!i)
+    clustPreds = transpose $ map (clusterPredictions distributions) clusters
+    clusters = clusterItems assignments stimuli
     querydims = V.toList $ V.map snd $ V.filter (isNothing . fst) $ V.zip querystim (V.enumFromN 0 (V.length querystim))
-    post = V.fromList $ clusterPosterior cprior distributions stimuli assignments querystim
-    ndim = length distributions
+    post = clusterPosterior cprior distributions stimuli assignments querystim
 
 
--- * Printing information about clusters
-
-summarizeCluster :: Stims -> Partition -> Int -> [Double]
-summarizeCluster allstims part i = []
+-- | Cluster centroids for all clusters in all dimensions
+summarizeClusters :: [PDFFromSample] -> Stims -> Partition -> [[Double]]
+summarizeClusters pdfs stims partition = map summfun clusts
   where
-    dims = vectranspose ndims stims 
-    ndims = V.length $ V.head allstims
-    stims = V.map (allstims!) indices
-    indices = V.elemIndices (Just i) part
-
-summarizeClusters :: Stims -> Partition -> [[Double]]
-summarizeClusters stims partition = map summfun [0..nclusts-1]
-  where
-    summfun = summarizeCluster stims partition
-    nclusts = length $ (nub . catMaybes) $ partList
-    partList = V.toList partition
+    summfun = clusterPredictions pdfs
+    clusts = clusterItems partition stims
 
