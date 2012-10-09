@@ -219,14 +219,25 @@ plot_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="act
   resps <- run_anderson_once(cparam, nlab, order, encoding)
   stims <- subset(resps, type=="STIM")
   stims <- subset(stims, bimod>0 & unimod>0 ) # Remove unlabeld
+  clusts <- subset(resps, type=="CLUST")
+  inferences <- subset(resps, type=="INFER")
   if (length(unique(stims$label)) == 3) labels <- c("unlabeled", "ch1", "ch2")
   else if (length(unique(stims$label)) == 2) labels <- c("ch1", "ch2")
   else if (length(unique(stims$label)) == 1) labels <- c("unlabeled")
   stims$label <- factor(stims$label, labels=labels)
-  ggplot(stims) + geom_point( aes(y=unimod, x=bimod, colour=label, size=2) ) + geom_path(aes(x=bimod, y=unimod, alpha=1), arrow=arrow(type="closed", length=unit(.25,"inches"), angle=15))
+  ggplot(stims) + 
+    geom_point( aes(y=unimod, x=bimod, shape=label) , size=4) + 
+    geom_point(data=inferences, aes(y=unimod, x=bimod, colour=label-.5) , size=4) + 
+    #geom_path(aes(x=bimod, y=unimod, alpha=1), arrow=arrow(type="closed", length=unit(.25,"inches"), angle=15)) +
+    geom_point(data=clusts, aes(y=unimod, x=bimod, colour=label-.5, shape="cluster"), size=12 ) +
+    scale_colour_gradient2()
 }
 
-plot_anderson(order="interspersed") # Sanity check
+#plot_anderson(cparam=1, order="interspersed")
+#plot_anderson(cparam=.7/.3, nlab=4, order="interspersed")
+#plot_anderson(cparam=.7/.3, order="interspersed")
+#plot_anderson(cparam=.7/.3, order="lablast" )
+#plot_anderson(cparam=.7/.3, order="labfirst" )
 
 run_sims <- function(runs, nreps) {
   #ntotal <- nrow(runs) * nreps
