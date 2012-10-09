@@ -24,13 +24,6 @@ import JohnFuns
 import Stats
 
 -- * Convenience functions
-safetail :: [a] -> [a]
-safetail [] = []
-safetail x = tail x
-
-gatherBy :: Ord b => (a -> b) -> [a] -> [[a]]
-gatherBy f = (groupBy ((==) `on` f)) . (sortBy (compare `on` f))
-
 -- * Stim dattype and associated functions
 type Stim = Vector (Maybe Double)
 
@@ -61,14 +54,6 @@ clusterItems assignments stims = takeWhile (not . V.null) clusters
   where
     clusters = map (\i-> V.map (stims!) $ V.elemIndices (Just i) assignments) [0..]
     
-vectranspose :: Int -> Vector (Vector a) -> Vector (Vector a)
-vectranspose mindim vec 
-  | V.null vec       = V.replicate mindim V.empty
-  | V.length vec == 1 = V.map V.singleton (vec!0)
-  | otherwise        = V.map (\c -> V.map (\r -> vec!r!c ) (V.enumFromN 0 rows)) (V.enumFromN 0 cols)
-  where
-    cols = (V.length . V.head) vec
-    rows = V.length vec
 
 
 -- Likelihood that a stimulus belongs to each cluster
@@ -99,4 +84,22 @@ infer cprior distributions stimuli assignments querystim = map inferDim querydim
     querydims = V.toList $ V.map snd $ V.filter (isNothing . fst) $ V.zip querystim (V.enumFromN 0 (V.length querystim))
     post = V.fromList $ clusterPosterior cprior distributions stimuli assignments querystim
     ndim = length distributions
+
+
+-- * Printing information about clusters
+
+summarizeCluster :: Stims -> Partition -> Int -> [Double]
+summarizeCluster allstims part i = []
+  where
+    dims = vectranspose ndims stims 
+    ndims = V.length $ V.head allstims
+    stims = V.map (allstims!) indices
+    indices = V.elemIndices (Just i) part
+
+summarizeClusters :: Stims -> Partition -> [[Double]]
+summarizeClusters stims partition = map summfun [0..nclusts-1]
+  where
+    summfun = summarizeCluster stims partition
+    nclusts = length $ (nub . catMaybes) $ partList
+    partList = V.toList partition
 
