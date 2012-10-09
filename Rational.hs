@@ -80,8 +80,8 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
     -- NOTE: watch out that the stim to be assigned isn't assigned in assignments.
     clustPriors = cprior $ (catMaybes . V.toList) assignments
     clustLikelihoods = map clustLik clusts ++ [emptyClustLik]
-    clustLik clust = V.product $ V.zipWith3 (\dist sample query -> (fst . dist) ((catMaybes . V.toList) sample) query ) distv (vectranspose ndim clust) newstim
-    emptyClustLik = V.product $ V.zipWith (\dist query -> (fst . dist) [] query) distv newstim
+    clustLik clust = V.product $ V.zipWith3 (\dist sample query -> (fst . dist) (V.map fromJust $ (V.filter isJust) sample) query ) distv (vectranspose ndim clust) newstim
+    emptyClustLik = V.product $ V.zipWith (\dist query -> (fst . dist) V.empty query) distv newstim
     clusts = clusterItems assignments stimuli
     stimlength = (V.length . V.head) stimuli
     distv = V.fromList distributions
@@ -93,7 +93,8 @@ infer :: ClusterPrior -> [PDFFromSample] -> Stims -> Partition -> Stim -> [Doubl
 infer cprior distributions stimuli assignments querystim = map inferDim querydims
   where
     inferDim i = V.sum $ V.zipWith (*) post (clustPreds!i)
-    clustPreds = vectranspose ndim $ V.map (V.fromList . (zipWith (\d c -> (snd . d . catMaybes . V.toList) c) distributions) . V.toList . (vectranspose ndim)) clusters
+    clustPreds = vectranspose ndim $ V.map (V.fromList . (zipWith distSummary distributions) . V.toList . (vectranspose ndim)) clusters
+    distSummary dist = snd . dist . V.map fromJust . V.filter isJust
     clusters = V.fromList $ clusterItems assignments stimuli
     querydims = V.toList $ V.map snd $ V.filter (isNothing . fst) $ V.zip querystim (V.enumFromN 0 (V.length querystim))
     post = V.fromList $ clusterPosterior cprior distributions stimuli assignments querystim

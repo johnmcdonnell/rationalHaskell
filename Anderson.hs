@@ -5,15 +5,15 @@ module Anderson (andersonSample,
 import Data.Function
 import Data.List
 import Data.Maybe
-import Control.Monad
-import Control.Monad.Random
-import System.Random
-
-import Control.Applicative
-import Control.Monad.ST
 import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
+import Control.Monad
+import Control.Monad.Random
+import Control.Applicative
+import Control.Monad.ST
+import System.Random
+import Statistics.Sample
 
 import Stats
 import Rational
@@ -69,15 +69,28 @@ andersonIterate prior encoding (assignments, stims) (i, newstim) = do
     let retAssign = V.modify (\vec -> VM.unsafeWrite vec i (Just chosenclust)) assignments
     return (retAssign, retStims)
 
+summarizeCluster :: Stims -> Partition -> Int -> String
+summarizeCluster allstims part i = "hi"
+  where
+    stims = V.map (allstims!) indices
+    indices = V.elemIndices (Just i) part
+
+summarizeClusters :: Stims -> Partition -> String
+summarizeClusters stims partition = concat $ intersperse "\n" $ map summfun [0..nclusts-1]
+  where
+    summfun = summarizeCluster stims partition
+    nclusts = length $ (nub . catMaybes) $ partList
+    partList = V.toList partition
+
 andersonSample ::    Encoding                  -- ^ How to encode items (Use guess or not)
                  -> (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
                  -> Stims                     -- ^ Task stimuli
                  -> Rand StdGen Partition
 andersonSample encoding prior stimuli = do
-    (finalAssign, finalStims) <- V.foldl' (\prev (i, newstim) ->
+    (finalAssign, finalStims) <- V.ifoldl' (\prev i newstim ->
                   prev >>= (flip (andersonIterate prior encoding) (i, newstim)))
                   (return (assignmentStore, stimStore)) 
-                  (V.indexed stimuli)
+                  stimuli
     return finalAssign
   where
     assignmentStore = V.replicate n Nothing

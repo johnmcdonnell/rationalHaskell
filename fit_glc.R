@@ -1,9 +1,11 @@
 
 # {{{1 Imports/boilerplate
 library(grt)
-library(ggplot2)
-library(plyr)
+
 library(reshape2)
+library(ggplot2)
+library(grid)
+library(plyr)
 
 library(foreach)
 library(doMC)
@@ -221,8 +223,10 @@ plot_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="act
   else if (length(unique(stims$label)) == 2) labels <- c("ch1", "ch2")
   else if (length(unique(stims$label)) == 1) labels <- c("unlabeled")
   stims$label <- factor(stims$label, labels=labels)
-  ggplot(stims) + geom_point( aes(y=unimod, x=bimod, colour=label, size=2) )
+  ggplot(stims) + geom_point( aes(y=unimod, x=bimod, colour=label, size=2) ) + geom_path(aes(x=bimod, y=unimod, alpha=1), arrow=arrow(type="closed", length=unit(.25,"inches"), angle=15))
 }
+
+plot_anderson(order="interspersed") # Sanity check
 
 run_sims <- function(runs, nreps) {
   #ntotal <- nrow(runs) * nreps
@@ -247,6 +251,10 @@ run_sims <- function(runs, nreps) {
   write.csv(all_sims, file="sims.csv")
   all_sims
 }
+
+# {{{2 Try one run
+simulate_anderson(1, -1, plotting=T, echo=T)
+# }}}2
 # }}}1
 
 # {{{1 Read the sim results
@@ -269,18 +277,18 @@ counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
 counts$twod <- counts$"2D"
 #print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))) + facet_wrap(~order))
 
-examining <- melt(counts,
-                  id=c("nlab", "cparam", "tau", "order", "encoding"),
-                  measure.vars=c("twod", "Bimodal", "Unimodal", "Null"),
-                  variable.name="bestfit",
-                  value.name="count")
+counts.melted <- melt(counts,
+                      id=c("nlab", "cparam", "tau", "order", "encoding"),
+                      measure.vars=c("twod", "Bimodal", "Unimodal", "Null"),
+                      variable.name="bestfit",
+                      value.name="count")
 
-examining$groupingparam <- do.call(paste, c(examining[c("bestfit", "encoding")], sep = ":"))
+counts.melted$groupingparam <- do.call(paste, c(counts.melted[c("bestfit", "encoding")], sep = ":"))
 
-print(ggplot(examining) +
+print(ggplot(counts.melted) +
       geom_line(aes(x=factor(nlab), y=count, group=groupingparam, linetype=encoding, colour=bestfit)) + 
       facet_grid(cparam~order, labeller=label_both) +
-      labs(title="2000 simulated runs of the Anderson Rational model"))
+      labs(title=paste(nreps, "simulated runs of the Anderson Rational model")))
 # }}}1
 
 # vim: foldmethod=marker

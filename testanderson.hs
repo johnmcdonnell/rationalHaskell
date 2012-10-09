@@ -16,7 +16,7 @@ import System.Random
 import System.Random.Shuffle
 import Text.CSV
 
-import Math.Statistics
+import Statistics.Sample
 
 import JohnFuns
 import Random
@@ -54,7 +54,7 @@ onedtask params n = do
     samples <- forM params (\(mu, sigma) -> evalRandIO $ (take n) . (map Just) <$> (normalsM mu sigma))
     let stims = map (\x -> [x]) $ concat samples
     items <- evalRandIO $ shuffleM stims
-    let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- (transpose . (map catMaybes)) items ]
+    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, 1, 1) | itemset <- (transpose . (map catMaybes)) items, let itemvec = V.fromList itemset  ]
     return (V.fromList $ map V.fromList items, tpriors)
 
 
@@ -63,7 +63,7 @@ twodtask params n = do
     let mergeDims = (\(x,y) -> zipWith (\x y -> [x,y]) x y)
     stims <- forM params (\(mu, sigma) -> evalRandIO $ (mergeDims . (splitAt n) . (take $ n*2) . map Just) <$> (normalsM mu sigma))
     items <- evalRandIO $ shuffleM (concat stims)
-    let tpriors = [tPosterior (mean itemset, stddev itemset, 1, 1) | itemset <- (transpose . map catMaybes) items ]
+    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, 1, 1) | itemset <- (transpose . map catMaybes) items, let itemvec = V.fromList itemset  ]
     return (V.fromList $ map V.fromList items, tpriors)
 
 zeithamovaMaddox :: (Double, Double) -> Int -> IO (Stims, [PDFFromSample])
@@ -78,7 +78,7 @@ zeithamovaMaddox (contalpha, contlambda) n = do
     bstims <- evalRandIO $ map (map Just) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
     items <- evalRandIO $ shuffleM (astims ++ bstims)
     let itemswithlabels = V.fromList $ map (\x -> V.snoc (V.fromList x) Nothing) items
-    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items ]
+    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items , let itemvec = V.fromList itemset ]
     let binomprior =  binomialPosterior [1, 1]
     return (itemswithlabels, tpriors ++ [binomprior])
 
@@ -108,7 +108,7 @@ mcdonnellTask (contalpha, contlambda) n nlab = do
     let labs = (replicate perCat $ Just 0) ++ (replicate unlab Nothing) ++ (replicate perCat $ Just 1)
     let stims =  zipWith (\loc maybelab -> (map Just loc) ++ [maybelab])  stimlocs labs
     shuffledstims <- evalRandIO $ shuffleM stims
-    let tpriors = [tPosterior (mean itemset, stddev itemset, contalpha, contlambda) | itemset <- transpose stimlocs ]
+    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- transpose stimlocs, let itemvec = V.fromList itemset ]
     let binomprior =  binomialPosterior [1, 1]
     return (V.fromList $ map V.fromList shuffledstims, tpriors ++ [binomprior])
 
@@ -130,7 +130,7 @@ mcdonnellTaskOrdered Interspersed priors n nlab = mcdonnellTask priors n nlab
 mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = do
     (task, priors) <- mcdonnellTask (contalpha, contlambda) n nlab
     thawed <- V.unsafeThaw task
-    VI.sortBy (\x y ->  comparison (V.last x) (V.last y)) thawed
+    VI.sortBy (\x y -> comparison (V.last x) (V.last y)) thawed
     V.unsafeFreeze thawed
     return (task, priors)
   where
@@ -182,7 +182,6 @@ testTVTask = do
     let encoding = case encodearg of "guess" -> EncodeGuess
                                      "softguess" -> EncodeGuessSoft
                                      otherwise -> EncodeActual
-    print $ "Order was " ++ show order;
     
     -- Set up priors
     let filterfun = if nounlab then V.filter (isJust . V.last) else id

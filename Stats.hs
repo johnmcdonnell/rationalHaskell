@@ -1,15 +1,17 @@
 
-
 module Stats (PDFFromSample,
               ClusterPrior,
               binomialPosterior,
               tPosterior,
               dirichletProcess) where
 
+import qualified Data.Vector as V
+import qualified Data.Map as Map
 import Data.List (group, sort)
 import qualified Statistics.Distribution as StatDist
 import Statistics.Distribution.StudentT as StatDist.T
-import Math.Statistics
+import Statistics.Sample
+-- import Math.Statistics
 
 import JohnFuns
 
@@ -19,9 +21,11 @@ tatval :: Double -- ^ df
        -> Double -- ^ PDF evaluated at x
 tatval = StatDist.density . studentT
 
+sq x = x*x
+
 -- * Generating PDFs from a sample of points
 
-type PDFFromSample = [Double] -> (Maybe Double -> Double, Double)
+type PDFFromSample = V.Vector Double -> (Maybe Double -> Double, Double)
 
 fillerDistribtution :: PDFFromSample
 fillerDistribtution sample = ((\x -> 0.5), 0.5)
@@ -39,11 +43,11 @@ tPosterior prior sample  = (pdfFun, mui)
                       (lambda0*n/(lambda0+n))*(sq (mu0-xbar))
                     ) / (alpha0 + n)
     mui = (lambda0*mu0 + n * xbar) / (lambda0 + n)
-    variance = if n>0 then pvar sample else 0 -- TODO: is pvar correct here? Also is this the right way to deal with a small sample?
+    variance = if n>0 then varianceUnbiased sample else 0 -- TODO: is varianceUnbiased correct here? Also is this the right way to deal with a small sample?
     xbar = if n>0 then mean sample else mu0
     lambdai = lambda0 + n
     alphai = alpha0 + n
-    n = fromIntegral $ length sample
+    n = fromIntegral $ V.length sample
     (mu0, sigma0, alpha0, lambda0) = prior
 
 -- NOTE should really be called Bernoulli not binomial.
@@ -53,9 +57,9 @@ binomialPosterior alphas sample = (pdfFun, pdfFun (Just 1))
     pdfFun Nothing = 1
     pdfFun (Just query) = (cj + alphas!!(floor query)) / (n + alpha0)
       where
-        cj = (fromIntegral . length . (filter (==query))) sample
-    n = sum ns
-    ns = map (fromIntegral . length) $ groupsortBy id sample
+        cj = (fromIntegral . V.length . (V.filter (==query))) sample
+    ns = map (fromIntegral . snd) $ Map.toAscList $ countUnique $ V.toList $ sample
+    n = fromIntegral $ V.length sample
     alpha0 = sum alphas
 
 -- Takes a list of assignments (assumed to be consecutive ints) and returns the
