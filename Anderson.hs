@@ -62,7 +62,7 @@ andersonIterate prior encoding (assignments, stims) (i, newstim) = do
     let encodefun = case encoding of EncodeGuess -> encodeGuess
                                      EncodeGuessSoft -> encodeGuessSoft 
                                      EncodeActual -> encodeActual
-    let guess = infer (fst prior) (snd prior) stims assignments newstim
+    let guess = fst $ infer prior stims assignments newstim
     encodestim <- encodefun newstim guess
     let chosenclust = sampleNext prior stims assignments encodestim
     let retStims = V.snoc stims encodestim -- TODO would be better in place.

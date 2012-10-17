@@ -4,7 +4,10 @@ module JohnFuns
     (
     debug,
     debugMessage,
+    both,
     countUnique,
+    maxWithArg,
+    argmax,
     safetail,
     gatherBy,
     gather,
@@ -20,6 +23,7 @@ import Debug.Trace
 import Data.Function (on)
 import Data.Typeable (Typeable, cast)
 import Data.Maybe (fromMaybe, fromJust, isJust)
+import Control.Arrow
 
 -- * Unsafe IO for 
 
@@ -30,8 +34,23 @@ debug v = trace (show v) v
 debugMessage :: (Show a) => String -> a -> a
 debugMessage message v = trace (message ++ show v) v
 
+-- * Fun with arrows
+
+both :: Arrow a => a b c -> a (b, b) (c, c)
+both f = f *** f
+
     
 -- * Things that should be in Data.List
+
+-- | Returns (argmax, max)
+maxWithArg :: Ord a => [a] -> (Int, a)
+maxWithArg items = List.foldl1' compare loopvals
+  where
+    compare opt next = if (snd next) > (snd opt) then next else opt
+    loopvals = zip [0..] items
+
+argmax :: Ord a => [a] -> Int
+argmax = fst . maxWithArg 
 
 -- | Tail which returns an empty list if empty
 safetail :: [a] -> [a]
@@ -65,5 +84,6 @@ vectranspose mindim vec
 -- Vector of the Just values
 catMaybeV :: Vector (Maybe a) -> Vector a
 catMaybeV = (V.map fromJust) . (V.filter isJust)
+
 
 

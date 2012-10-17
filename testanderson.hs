@@ -137,19 +137,21 @@ mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = do
     comparison = case order of LabeledFirst -> labfirstcompare
                                LabeledLast -> lablastcompare
 
-runGridTest :: ClusterPrior -> [PDFFromSample] -> Stims -> Partition -> Vector (Stim, Double)
-runGridTest cprior distributions stimuli assignments = V.zip grid labels
-  where 
-    labels = V.map (head . (infer cprior distributions stimuli assignments)) grid
-    grid = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
+gridTest :: Stims
+gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
 
+
+runTest :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stims -> Vector (Double, Double)
+runTest prior stimuli assignments = V.map getpred
+  where
+    getpred = (second (fromIntegral . argmax)) . (first head) . (infer prior stimuli assignments)
 
 testContinuous = do
     let mu1 = 1
-    let sigma1 = 1
-    let mu2 = -1
-    let sigma2 = 1
-    let n = 3
+        sigma1 = 1
+        mu2 = -1
+        sigma2 = 1
+        n = 3
     putStrLn "Testing on:" 
     putStrLn $ "mu1=" ++ (show mu1) ++ " sigma1=" ++ (show sigma1) ++ " n=" ++ (show n)
     putStrLn $ "mu2=" ++ (show mu2) ++ " sigma2=" ++ (show sigma2) ++ " n=" ++ (show n)
@@ -169,17 +171,17 @@ testZeithamova = do
 testTVTask = do
     args <- getArgs
     let cparam = if length args > 0 then read (args!!0) else 1
-    let maxlab = 16
-    let (nlab, nounlab) = if length args > 1 then (\x -> if x<0 then (maxlab, True) else (x, False) ) $ read (args!!1) 
+        maxlab = 16
+        (nlab, nounlab) = if length args > 1 then (\x -> if x<0 then (maxlab, True) else (x, False) ) $ read (args!!1) 
                                              else (maxlab, False)
-    let orderarg = if length args > 2 then (args!!2) else "interspersed"
-    let encodearg = if length args > 3 then (args!!3) else "actual"
+        orderarg = if length args > 2 then (args!!2) else "interspersed"
+        encodearg = if length args > 3 then (args!!3) else "actual"
     
-    let order = case orderarg of "interspersed" -> Interspersed
+        order = case orderarg of "interspersed" -> Interspersed
                                  "labfirst"     -> LabeledFirst
                                  "lablast"      -> LabeledLast
                                  otherwise      -> error $ "Inappropriate order: " ++ orderarg ++ "; order should be one of interspersed, labfirst, lablast."
-    let encoding = case encodearg of "guess" -> EncodeGuess
+        encoding = case encodearg of "guess" -> EncodeGuess
                                      "softguess" -> EncodeGuessSoft
                                      otherwise -> EncodeActual
     
@@ -195,9 +197,9 @@ testTVTask = do
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
-    let demabified = V.map demabify task
-    let results = map (\(x,Just y) -> V.toList $ V.snoc x (fromIntegral y)) $ (filter (isJust . snd)) $ zip (V.toList demabified) (V.toList partition)
-    let resultstrings = map (map show) results
+        demabified = V.map demabify task
+        results = map (\(x,Just y) -> V.toList $ V.snoc x (fromIntegral y)) $ (filter (isJust . snd)) $ zip (V.toList demabified) (V.toList partition)
+        resultstrings = map (map show) results
     
     -- Print it out
     putStrLn $ printCSV $ map ("STIM":) resultstrings
@@ -205,7 +207,10 @@ testTVTask = do
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
     
     -- Get inference at each point in a grid
-    putStrLn $ printCSV $ map (("INFER":) . (map show) . \(stim, resp) -> (take 2 . V.toList . demabify) stim ++ [resp] ) $ V.toList $ (uncurry runGridTest) prior task partition
+    let testInferences = runTest prior task partition gridTest
+        teststims = V.map (V.toList . (V.map (fromMaybe (-1))) . (V.take 2)) gridTest
+        ret = V.zipWith (\stim (lab, clust) -> (("INFER":) . (map show)) $ stim ++ [lab, clust]) teststims testInferences
+    putStrLn $ printCSV $ V.toList ret
 
 main = do
     -- testMedinSchaffer

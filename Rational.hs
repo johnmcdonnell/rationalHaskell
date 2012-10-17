@@ -7,19 +7,22 @@ module Rational (
                  Stim,
                  Stims,
                  Partition,
+                 validatePartition,
                  clusterPredictions,
                  summarizeClusters
                 ) where
 
-import Data.List (nub, group, groupBy, transpose, sortBy, splitAt)
 import Data.Function (on)
 import Data.Maybe
-
-import Control.Monad
-import Control.Monad.ST
+import Data.List (nub, group, groupBy, transpose, sortBy, splitAt)
+import qualified Data.Set as Set
 import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
+
+import Control.Exception
+import Control.Monad
+import Control.Monad.ST
 
 import Statistics.Sample
 
@@ -36,13 +39,27 @@ type Stims = Vector Stim
 -- * Partition dattype and associated functions
 type Partition = Vector (Maybe Int)
 
+-- | Partitions must have all members from [0..max]
+validatePartition :: Partition -> Bool
+validatePartition part 
+  | V.null justs = True
+  | otherwise    = minzero && correctn
+  where
+    correctn = length uniques == (max+1)
+    minzero = min==0
+    uniques = (nub . V.toList) justs
+    max = V.maximum justs
+    min = V.minimum justs
+    justs = V.map fromJust $ V.filter isJust part
+
+
 -- Safely remove item from Partition 
 dropAssignment :: Partition -> Int -> Partition
 dropAssignment assignments i = runST $ do
     let clustm = assignments!i
     let clust = fromJust clustm
     let nInClust = V.length $ V.filter (==clustm) assignments
-    let iterfun x = if maybe True (<clust) x then x else fmap (\x->x-1) x :: Maybe Int
+    let iterfun x = if maybe True (<clust) x then x else fmap (\x -> x-1) x :: Maybe Int
     let n = V.length assignments
     thawedassign <- V.unsafeThaw assignments
     VM.unsafeWrite thawedassign i Nothing
@@ -51,6 +68,7 @@ dropAssignment assignments i = runST $ do
                           (VM.unsafeRead thawedassign j )>>=
                           (VM.unsafeWrite thawedassign j) . iterfun)
     V.unsafeFreeze thawedassign 
+
 
 clusterItems :: Partition -> Stims -> [Stims]
 clusterItems assignments stims = takeWhile (not . V.null) clusters
@@ -83,13 +101,14 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
 
 -- | For all missing items in the querystim, infers the most likely possible
 -- | outcome, taking all possible cluster assignments into account.
-infer :: ClusterPrior -> [PDFFromSample] -> Stims -> Partition -> Stim -> [Double]
-infer cprior distributions stimuli assignments querystim = map inferDim querydims
+infer :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stim -> ([Double], [Double])
+infer (cprior, distributions) stimuli assignments querystim = (prediction, post)
   where
+    prediction = map inferDim queryDims
     inferDim i = sum $ (zipWith (*) post) (clustPreds!!i)
     clustPreds = transpose $ map (clusterPredictions distributions) clusters
     clusters = clusterItems assignments stimuli
-    querydims = V.toList $ V.map snd $ V.filter (isNothing . fst) $ V.zip querystim (V.enumFromN 0 (V.length querystim))
+    queryDims = V.toList $ V.map snd $ V.filter (isNothing . fst) $ V.zip querystim (V.enumFromN 0 (V.length querystim))
     post = clusterPosterior cprior distributions stimuli assignments querystim
 
 
