@@ -12,18 +12,21 @@ module JohnFuns
     gatherBy,
     gather,
     vectranspose,
-    catMaybeV
+    catMaybeV,
+    inplacewrite
     ) where
 
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Vector as V
 import Data.Vector (Vector, (!))
+import qualified Data.Vector.Mutable as VM
 import Debug.Trace
 import Data.Function (on)
 import Data.Typeable (Typeable, cast)
 import Data.Maybe (fromMaybe, fromJust, isJust)
 import Control.Arrow
+-- import Control.Monad.ST
 
 -- * Unsafe IO for 
 
@@ -62,14 +65,14 @@ gatherBy :: Ord b => (a -> b) -> [a] -> [[a]]
 gatherBy f = (List.groupBy ((==) `on` f)) . (List.sortBy (compare `on` f))
 
 -- | Returns a list of items, grouped by identity.
-gather :: (Ord a, Ord b) => (a -> b) -> [a] -> [[a]]
-gather f = gatherBy id
+gather :: Ord a => [a] -> [[a]]
+gather = gatherBy id
 
 -- | Returns map from each value to how often it occured.
 countUnique :: Ord a => [a] -> Map.Map a Int
 countUnique = List.foldl' additem Map.empty
   where
-    additem = flip $ flip (Map.insertWith (+)) 1
+    additem sofar newkey = Map.insertWith (+) newkey 1 sofar
 
 -- * Things that should be in Data.Vector
 vectranspose :: Int -> Vector (Vector a) -> Vector (Vector a)
@@ -81,9 +84,13 @@ vectranspose mindim vec
     cols = (V.length . V.head) vec
     rows = V.length vec
 
--- Vector of the Just values
+-- |Vector of the Just values in a vector
 catMaybeV :: Vector (Maybe a) -> Vector a
 catMaybeV = (V.map fromJust) . (V.filter isJust)
 
+
+inplacewrite index newval = V.modify modfun
+  where
+    modfun v = VM.write v index newval
 
 

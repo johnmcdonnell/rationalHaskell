@@ -12,7 +12,6 @@ library(doMC)
 registerDoMC()
 # }}}1
 
-#
 # {{{1 General statistics
 bic.general <- function(negloglik, n, k) log( n )*k - 2*negloglik
 # }}}1
@@ -183,7 +182,7 @@ softmax_binomial <- function(pfalse, tau) {
 run_anderson_once <- function(...) {
   output_columns <- c("type","bimod","unimod","label","clust")
   command <- paste("./testanderson", ...)
-  read.csv(pipe(command), col.names=output_columns)
+  read.csv(pipe(command), col.names=output_columns, header=F)
 }
 # }}}1
 
@@ -215,27 +214,61 @@ simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding=
   fits.table(inferences)
 }
 
-plot_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", tau=.05, plotting=F, echo=F) {
+plot_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="actual") {
   resps <- run_anderson_once(cparam, nlab, order, encoding)
-  stims <- subset(resps, type=="STIM")
-  stims <- subset(stims, bimod>0 & unimod>0 ) # Remove unlabeld
+  all.stims <- subset(resps, type=="STIM")
+  stims <- subset(all.stims, bimod>0 & unimod>0 ) # Remove invisible
+  # BUG somtimes there is no cluster assigned number 0.
+  stopifnot( min( stims$clust )==0 )
   clusts <- subset(resps, type=="CLUST")
+  clusts$n <- daply( all.stims, .(clust), nrow )
   inferences <- subset(resps, type=="INFER")
   if (length(unique(stims$label)) == 3) labels <- c("unlabeled", "ch1", "ch2")
   else if (length(unique(stims$label)) == 2) labels <- c("ch1", "ch2")
   else if (length(unique(stims$label)) == 1) labels <- c("unlabeled")
   stims$label <- factor(stims$label, labels=labels)
   ggplot(stims) + 
-    geom_point( aes(y=unimod, x=bimod, shape=label) , size=4) + 
-    geom_point(data=inferences, aes(y=unimod, x=bimod, colour=label-.5) , size=4) + 
+    geom_point( aes(y=unimod, x=bimod, shape=label) , size=1) + 
+    geom_point(data=inferences, aes(y=unimod, x=bimod, colour=label-.5) , size=1) + 
     #geom_path(aes(x=bimod, y=unimod, alpha=1), arrow=arrow(type="closed", length=unit(.25,"inches"), angle=15)) +
-    geom_point(data=clusts, aes(y=unimod, x=bimod, colour=label-.5, shape="cluster"), size=12 ) +
+    geom_point(data=clusts, aes(y=unimod, x=bimod, colour=label-.5, shape="cluster", size=n) ) +
     scale_colour_gradient2()
 }
 
-#plot_anderson(cparam=1, order="interspersed")
+cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", firstnclusts=1) {
+  resps <- run_anderson_once(cparam, nlab, order, encoding)
+  all.stims <- subset(resps, type=="INFER")
+  clustlengths <- rev(sort(daply( all.stims, .(clust), nrow )))
+  if (clustlengths < firstnclusts) firstnclusts <- clustlengths
+  sum(clustlengths[1:firstnclusts]) / sum(clustlengths)
+}
+
+cluster_proportion(cparam=.75, order="interspersed", firstnclusts=2)
+
+clustprop_for_cparam <- function(cparam) {
+  replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))
+  data.frame(cparam=paste("c =", cparam), proportion=replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))), 
+}
+
+clustprops <- ldply(list(.75, 1, 1.8, .7/.3), 
+                    function(cparam) data.frame(cparam=paste("c =", cparam), proportion=replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))), 
+                    .parallel=T)
+ggplot(clustprops) + 
+geom_histogram(aes(x=proportion)) + 
+facet_grid(~cparam) + xlim(c(0,1)) + 
+labs(title="Dominance of the 2 largest clusters at different clustering parameters (c=infinity -> infinite cluster).",
+       y="Count (out of 1000)",
+       x="Proportion of test items falling into the 2 largest clusters.")
+ggsave("clustproportions.pdf")
+
+ddply( clustprops, .(cparam), summarise, mean)
+
+
+help(hist )
+
+plot_anderson(cparam=1, order="interspersed")
+plot_anderson(cparam=.7/.3, order="interspersed")
 #plot_anderson(cparam=.7/.3, nlab=4, order="interspersed")
-#plot_anderson(cparam=.7/.3, order="interspersed")
 #plot_anderson(cparam=.7/.3, order="lablast" )
 #plot_anderson(cparam=.7/.3, order="labfirst" )
 
@@ -263,23 +296,34 @@ run_sims <- function(runs, nreps) {
   all_sims
 }
 
+
 # {{{2 Try one run
-simulate_anderson(1, -1, plotting=T, echo=T)
+simulate_anderson(1, 0, plotting=T, echo=T)
+
+resps <- run_anderson_once(1, 16, "interspersed", "actual")
+
+stims <- subset(resps, type=="STIM")
+clusts <- subset(resps, type=="CLUST")
+clusts
+head(stims)
+stims$clust
+clustcounts <- daply( stims, .(clust), nrow )
+clustcounts['1']
 # }}}2
 # }}}1
 
-# {{{1 Read the sim results
-#sims <- read.csv("sims.csv")
-runs <- expand.grid(nlab=c(-1), 
+# {{{1 Run sims across conditions.
+runs <- expand.grid(nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labfirst", "lablast"),
-                    cparam=c(1, 1.8, .7/.3),
+                    cparam=c(.75, 1, 1.8, .7/.3),
                     tau=c(.05), 
                     encoding=c("actual"))
 runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
 
-nreps <- 300
+nreps <- 1000
+#sims <- read.csv("sims.csv")
 sims <- run_sims(runs, nreps)
-print(summary(sims$BestFit))
+sims$nlab[sims$nlab==-1] <- Inf
 
 counts <- ddply( sims, .(nlab, cparam, tau, order, encoding), function(x) summary(x$BestFit) )
 counts$ratio <- counts$Bimodal/counts$"2D"

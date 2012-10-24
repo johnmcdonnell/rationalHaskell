@@ -1,9 +1,11 @@
 
 -- import qualified Control.Monad.State as State
 import Data.List (sortBy, transpose)
+import Data.Ord
 import Data.Function (on)
 import Data.Maybe
 import Data.Vector (freeze, thaw, MVector, Vector, (!))
+import qualified Data.Map as Map
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VI
 import Control.Applicative
@@ -195,6 +197,16 @@ testTVTask = do
     -- Now run the model
     partition <- evalRandIO $ andersonSample encoding prior task
     
+    -- If there were no labels, we have to assume they are associated with the largest clusters.
+    let partitions = Map.assocs $ countUnique (V.toList partition)
+        largestClusts = map fst $ take 2 $ sortBy (compare `on` (Down . snd)) partitions -- may have to import Data.Ord to get Down
+        addlabel (i, clust) taskvec = inplacewrite index newstim taskvec
+          where
+            index = fromJust $ V.elemIndex clust partition 
+            newstim = inplacewrite 2 (Just i) (taskvec!index)
+        newtask = foldr addlabel task (zip [0..] largestClusts)
+        modtask = if (nlab==0) then newtask else task
+    
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
         demabified = V.map demabify task
@@ -207,7 +219,7 @@ testTVTask = do
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
     
     -- Get inference at each point in a grid
-    let testInferences = runTest prior task partition gridTest
+    let testInferences = runTest prior modtask partition gridTest
         teststims = V.map (V.toList . (V.map (fromMaybe (-1))) . (V.take 2)) gridTest
         ret = V.zipWith (\stim (lab, clust) -> (("INFER":) . (map show)) $ stim ++ [lab, clust]) teststims testInferences
     putStrLn $ printCSV $ V.toList ret
