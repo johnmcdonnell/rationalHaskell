@@ -239,32 +239,28 @@ cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding
   resps <- run_anderson_once(cparam, nlab, order, encoding)
   all.stims <- subset(resps, type=="INFER")
   clustlengths <- rev(sort(daply( all.stims, .(clust), nrow )))
-  if (clustlengths < firstnclusts) firstnclusts <- clustlengths
+  nclusts <- length(unique(all.stims$clust))
+  if (nclusts < firstnclusts) firstnclusts <- nclusts
   sum(clustlengths[1:firstnclusts]) / sum(clustlengths)
 }
 
-cluster_proportion(cparam=.75, order="interspersed", firstnclusts=2)
-
-clustprop_for_cparam <- function(cparam) {
-  replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))
-  data.frame(cparam=paste("c =", cparam), proportion=replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))), 
-}
+cluster_proportion(cparam=1, nlab=0, order="interspersed", firstnclusts=2)
 
 clustprops <- ldply(list(.75, 1, 1.8, .7/.3), 
                     function(cparam) data.frame(cparam=paste("c =", cparam), proportion=replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))), 
                     .parallel=T)
 ggplot(clustprops) + 
 geom_histogram(aes(x=proportion)) + 
-facet_grid(~cparam) + xlim(c(0,1)) + 
+facet_grid(~cparam) + xlim(c(0,1.01)) + 
 labs(title="Dominance of the 2 largest clusters at different clustering parameters (c=infinity -> infinite cluster).",
        y="Count (out of 1000)",
        x="Proportion of test items falling into the 2 largest clusters.")
 ggsave("clustproportions.pdf")
 
-ddply( clustprops, .(cparam), summarise, mean)
+nrow(subset(head(clustprops, 1000), proportion==1))
 
+ddply( clustprops, .(cparam), summarise, mean(proportion))
 
-help(hist )
 
 plot_anderson(cparam=1, order="interspersed")
 plot_anderson(cparam=.7/.3, order="interspersed")

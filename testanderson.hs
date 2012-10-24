@@ -143,10 +143,11 @@ gridTest :: Stims
 gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
 
 
-runTest :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stims -> Vector (Double, Double)
+-- Returns the likelihood of "0" as the first argument, and the most likely cluster as the second.
+runTest :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stims -> Vector (Double, Int)
 runTest prior stimuli assignments = V.map getpred
   where
-    getpred = (second (fromIntegral . argmax)) . (first head) . (infer prior stimuli assignments)
+    getpred = (second (argmax)) . (first head) . (infer prior stimuli assignments)
 
 testContinuous = do
     let mu1 = 1
@@ -197,16 +198,6 @@ testTVTask = do
     -- Now run the model
     partition <- evalRandIO $ andersonSample encoding prior task
     
-    -- If there were no labels, we have to assume they are associated with the largest clusters.
-    let partitions = Map.assocs $ countUnique (V.toList partition)
-        largestClusts = map fst $ take 2 $ sortBy (compare `on` (Down . snd)) partitions -- may have to import Data.Ord to get Down
-        addlabel (i, clust) taskvec = inplacewrite index newstim taskvec
-          where
-            index = fromJust $ V.elemIndex clust partition 
-            newstim = inplacewrite 2 (Just i) (taskvec!index)
-        newtask = foldr addlabel task (zip [0..] largestClusts)
-        modtask = if (nlab==0) then newtask else task
-    
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
         demabified = V.map demabify task
@@ -218,10 +209,22 @@ testTVTask = do
     
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
     
+    -- If there were no labels, we have to assume they are associated with the largest clusters.
+    let initialinferences =  runTest prior task partition gridTest
+        inferpartition = map snd $ V.toList initialinferences
+        partitions = Map.assocs $ countUnique inferpartition
+        largestClusts = map fst $ take 2 $ sortBy (compare `on` (Down . snd)) partitions
+        addlabel (i, clust) taskvec = inplacewrite index newstim taskvec
+          where
+            index = fromJust $ V.elemIndex (Just clust) partition 
+            newstim = inplacewrite 2 (Just i) (taskvec!index)
+        newtask = foldr addlabel task (zip [0..] largestClusts)
+        modtask = if (nlab==0) then newtask else task
+    
     -- Get inference at each point in a grid
     let testInferences = runTest prior modtask partition gridTest
         teststims = V.map (V.toList . (V.map (fromMaybe (-1))) . (V.take 2)) gridTest
-        ret = V.zipWith (\stim (lab, clust) -> (("INFER":) . (map show)) $ stim ++ [lab, clust]) teststims testInferences
+        ret = V.zipWith (\stim (lab, clust) -> "INFER" : (map show (stim ++ [lab])) ++ [show clust]) teststims testInferences
     putStrLn $ printCSV $ V.toList ret
 
 main = do
