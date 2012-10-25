@@ -51,24 +51,24 @@ testMedinSchaffer = do
     let couplingParam = dirichletProcess 1.0
     andersonSample EncodeActual (couplingParam, dists) task
 
-onedtask :: [(Double, Double)] -> Int -> IO (Stims, [PDFFromSample])
+onedtask :: RandomGen g => [(Double, Double)] -> Int -> Rand g (Stims, [PDFFromSample])
 onedtask params n = do
-    samples <- forM params (\(mu, sigma) -> evalRandIO $ (take n) . (map Just) <$> (normalsM mu sigma))
+    samples <- forM params (\(mu, sigma) -> (take n) . (map Just) <$> (normalsM mu sigma))
     let stims = map (\x -> [x]) $ concat samples
-    items <- evalRandIO $ shuffleM stims
+    items <- shuffleM stims
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, 1, 1) | itemset <- (transpose . (map catMaybes)) items, let itemvec = V.fromList itemset  ]
     return (V.fromList $ map V.fromList items, tpriors)
 
 
-twodtask :: [(Double, Double)] -> Int -> IO (Stims, [PDFFromSample])
+twodtask :: (RandomGen g) => [(Double, Double)] -> Int -> Rand g (Stims, [PDFFromSample])
 twodtask params n = do
     let mergeDims = (\(x,y) -> zipWith (\x y -> [x,y]) x y)
-    stims <- forM params (\(mu, sigma) -> evalRandIO $ (mergeDims . (splitAt n) . (take $ n*2) . map Just) <$> (normalsM mu sigma))
-    items <- evalRandIO $ shuffleM (concat stims)
+    stims <- forM params (\(mu, sigma) -> (mergeDims . (splitAt n) . (take $ n*2) . map Just) <$> (normalsM mu sigma))
+    items <- shuffleM (concat stims)
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, 1, 1) | itemset <- (transpose . map catMaybes) items, let itemvec = V.fromList itemset  ]
     return (V.fromList $ map V.fromList items, tpriors)
 
-zeithamovaMaddox :: (Double, Double) -> Int -> IO (Stims, [PDFFromSample])
+zeithamovaMaddox :: (RandomGen g) => (Double, Double) -> Int -> Rand g (Stims, [PDFFromSample])
 zeithamovaMaddox (contalpha, contlambda) n = do
     -- length bimodal
     let bimodmean1 = 187.5
@@ -76,9 +76,9 @@ zeithamovaMaddox (contalpha, contlambda) n = do
     let bimodsd = 12.5
     let unimodmean = 45
     let unimodsd = 15
-    astims <-  evalRandIO $ map (map Just) <$> binormals bimodmean1 unimodmean bimodsd unimodsd n
-    bstims <- evalRandIO $ map (map Just) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
-    items <- evalRandIO $ shuffleM (astims ++ bstims)
+    astims <-  map (map Just) <$> binormals bimodmean1 unimodmean bimodsd unimodsd n
+    bstims <- map (map Just) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
+    items <- shuffleM (astims ++ bstims)
     let itemswithlabels = V.fromList $ map (\x -> V.snoc (V.fromList x) Nothing) items
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items , let itemvec = V.fromList itemset ]
     let binomprior =  bernoulliPosterior [1, 1]
@@ -93,7 +93,7 @@ randomInSquare xbounds ybounds = do
 randomsInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Int -> Rand g [[a]]
 randomsInSquare xbounds ybounds n = sequence $ replicate n (randomInSquare xbounds ybounds)
 
-mcdonnellTask :: (Double, Double) -> Int -> Int -> IO (Stims, [PDFFromSample])
+mcdonnellTask :: RandomGen g => (Double, Double) -> Int -> Int -> Rand g (Stims, [PDFFromSample])
 mcdonnellTask (contalpha, contlambda) n nlab = do
     let (boxmultiplier, nrem) = quotRem n 28
     let (perCat, nlabrem) = quotRem nlab 2
@@ -105,11 +105,11 @@ mcdonnellTask (contalpha, contlambda) n nlab = do
     let boxes = zip (init boxBorders) (tail boxBorders)
     let boxcounts = (map (*boxmultiplier) [2,3,4,3,2])
     let stimArgs = map uncurry bimodBounds <*> (zip boxes boxcounts)
-    stimlocsGrouped <- evalRandIO $ sequence $ map (\(xs, ys, n) -> randomsInSquare xs ys n) stimArgs
+    stimlocsGrouped <- sequence $ map (\(xs, ys, n) -> randomsInSquare xs ys n) stimArgs
     let stimlocs = concat stimlocsGrouped
     let labs = (replicate perCat $ Just 0) ++ (replicate unlab Nothing) ++ (replicate perCat $ Just 1)
     let stims =  zipWith (\loc maybelab -> (map Just loc) ++ [maybelab])  stimlocs labs
-    shuffledstims <- evalRandIO $ shuffleM stims
+    shuffledstims <- shuffleM stims
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- transpose stimlocs, let itemvec = V.fromList itemset ]
     let binomprior =  bernoulliPosterior [1, 1]
     return (V.fromList $ map V.fromList shuffledstims, tpriors ++ [binomprior])
@@ -127,15 +127,14 @@ lablastcompare _         _         = EQ
 
 data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show)
 
-mcdonnellTaskOrdered :: SortOrder -> (Double, Double) -> Int -> Int -> IO (Stims, [PDFFromSample])
+mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double) -> Int -> Int -> Rand g (Stims, [PDFFromSample])
 mcdonnellTaskOrdered Interspersed priors n nlab = mcdonnellTask priors n nlab
 mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = do
     (task, priors) <- mcdonnellTask (contalpha, contlambda) n nlab
-    thawed <- V.unsafeThaw task
-    VI.sortBy (\x y -> comparison (V.last x) (V.last y)) thawed
-    V.unsafeFreeze thawed
-    return (task, priors)
+    let sortedtask = V.modify tasksort task
+    return (sortedtask, priors)
   where
+    tasksort v = VI.sortBy (\x y -> comparison (V.last x) (V.last y)) v
     comparison = case order of LabeledFirst -> labfirstcompare
                                LabeledLast -> lablastcompare
 
@@ -158,14 +157,14 @@ testContinuous = do
     putStrLn "Testing on:" 
     putStrLn $ "mu1=" ++ (show mu1) ++ " sigma1=" ++ (show sigma1) ++ " n=" ++ (show n)
     putStrLn $ "mu2=" ++ (show mu2) ++ " sigma2=" ++ (show sigma2) ++ " n=" ++ (show n)
-    (task, distpriors) <- twodtask [(mu1, sigma1), (mu2, sigma2)] n
+    (task, distpriors) <- evalRandIO $ twodtask [(mu1, sigma1), (mu2, sigma2)] n
     
     let prior  = (dirichletProcess 1.0, distpriors)
     partition <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 testZeithamova = do
-    (task, distpriors) <- zeithamovaMaddox (1, 1) 100
+    (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
     partition <- evalRandIO $ andersonSample EncodeActual prior task
@@ -190,7 +189,7 @@ testTVTask = do
     
     -- Set up priors
     let filterfun = if nounlab then V.filter (isJust . V.last) else id
-    (task, distpriors) <- first filterfun <$> mcdonnellTaskOrdered order (1, 1) (28*4) nlab
+    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (1, 1) (28*4) nlab
     -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
     
     let prior  = (dirichletProcess cparam, distpriors)
