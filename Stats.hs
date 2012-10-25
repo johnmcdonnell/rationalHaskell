@@ -1,7 +1,7 @@
 
 module Stats (PDFFromSample,
               ClusterPrior,
-              binomialPosterior,
+              bernoulliPosterior,
               tPosterior,
               dirichletProcess) where
 
@@ -51,8 +51,8 @@ tPosterior prior sample  = (pdfFun, mui)
     (mu0, sigma0, alpha0, lambda0) = prior
 
 -- NOTE should really be called Bernoulli not binomial.
-binomialPosterior :: [Double] -> PDFFromSample
-binomialPosterior alphas sample = (pdfFun, pdfFun (Just 1))
+bernoulliPosterior :: [Double] -> PDFFromSample
+bernoulliPosterior alphas sample = (pdfFun, pdfFun (Just 1))
   where
     pdfFun Nothing = 1
     pdfFun (Just query) = (cj + alphas!!(floor query)) / (n + alpha0)

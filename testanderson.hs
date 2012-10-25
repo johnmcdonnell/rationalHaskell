@@ -36,7 +36,7 @@ medinSchafferTask :: [Double] -> (Stims, [PDFFromSample])
 medinSchafferTask binomAlphas = (medinSchafferStims, andersondists)
   where 
     andersondists = replicate 5 binom_prior
-    binom_prior = binomialPosterior binomAlphas
+    binom_prior = bernoulliPosterior binomAlphas
     medinSchafferStims = V.fromList $ map (V.fromList . (map Just)) medinSchafferItems
     medinSchafferItems = [[1,1,1,1,1], 
                           [1,0,1,0,1], 
@@ -81,7 +81,7 @@ zeithamovaMaddox (contalpha, contlambda) n = do
     items <- evalRandIO $ shuffleM (astims ++ bstims)
     let itemswithlabels = V.fromList $ map (\x -> V.snoc (V.fromList x) Nothing) items
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items , let itemvec = V.fromList itemset ]
-    let binomprior =  binomialPosterior [1, 1]
+    let binomprior =  bernoulliPosterior [1, 1]
     return (itemswithlabels, tpriors ++ [binomprior])
 
 randomInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Rand g [a]
@@ -98,7 +98,7 @@ mcdonnellTask (contalpha, contlambda) n nlab = do
     let (boxmultiplier, nrem) = quotRem n 28
     let (perCat, nlabrem) = quotRem nlab 2
     let unlab = n - nlab
-    when (nrem /=0 ) $ error $ "McDonnell Task n must be divisible by 28. Instead it was " ++ show n 
+    when (nrem /= 0) $ error $ "McDonnell Task n must be divisible by 28. Instead it was " ++ show n 
     when (nlabrem /= 0) $ error $ "McDonnell Task nlab must be divisible by 2. Instead it was " ++ show nlab
     let bimodBounds = map (,,) [(0, 0.2), (0.8, 1)]
     let boxBorders = [0,0.2..1]
@@ -111,7 +111,7 @@ mcdonnellTask (contalpha, contlambda) n nlab = do
     let stims =  zipWith (\loc maybelab -> (map Just loc) ++ [maybelab])  stimlocs labs
     shuffledstims <- evalRandIO $ shuffleM stims
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- transpose stimlocs, let itemvec = V.fromList itemset ]
-    let binomprior =  binomialPosterior [1, 1]
+    let binomprior =  bernoulliPosterior [1, 1]
     return (V.fromList $ map V.fromList shuffledstims, tpriors ++ [binomprior])
 
 
