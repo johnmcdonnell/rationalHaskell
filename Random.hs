@@ -11,7 +11,7 @@ import System.Random.Shuffle
 import Data.Random.Normal
 import Control.Applicative ((<$>))
 
-import JohnFuns
+import Utils
 
 -- Thanks to: http://stackoverflow.com/questions/2110535/sampling-sequences-of-random-numbers-in-haskell/2125329#2125329
 -- for a start on this.

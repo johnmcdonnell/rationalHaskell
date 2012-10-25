@@ -1,4 +1,3 @@
-
 module Stats (PDFFromSample,
               ClusterPrior,
               bernoulliPosterior,
@@ -13,7 +12,7 @@ import Statistics.Distribution.StudentT as StatDist.T
 import Statistics.Sample
 -- import Math.Statistics
 
-import JohnFuns
+import Utils
 
 -- helper funs
 tatval :: Double -- ^ df

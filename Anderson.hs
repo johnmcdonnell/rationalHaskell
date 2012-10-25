@@ -17,7 +17,7 @@ import Statistics.Sample
 
 import Stats
 import Rational
-import JohnFuns
+import Utils
 
 -- Anderson sampling
 sampleNext :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stim -> Int

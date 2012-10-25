@@ -1,6 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 
-module JohnFuns 
+module Utils
     (
     debug,
     debugMessage,

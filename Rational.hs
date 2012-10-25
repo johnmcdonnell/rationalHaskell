@@ -1,7 +1,6 @@
 {-# LANGUAGE Rank2Types #-}
 
-module Rational (
-                 clusterPosterior,
+module Rational (clusterPosterior,
                  clusterItems,
                  infer,
                  Stim,
@@ -26,7 +25,7 @@ import Control.Monad.ST
 
 import Statistics.Sample
 
-import JohnFuns
+import Utils
 import Stats
 
 -- * Convenience functions
