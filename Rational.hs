@@ -52,23 +52,6 @@ validatePartition part
     justs = V.map fromJust $ V.filter isJust part
 
 
--- Safely remove item from Partition 
-dropAssignment :: Partition -> Int -> Partition
-dropAssignment assignments i = runST $ do
-    let clustm = assignments!i
-    let clust = fromJust clustm
-    let nInClust = V.length $ V.filter (==clustm) assignments
-    let iterfun x = if maybe True (<clust) x then x else fmap (\x -> x-1) x :: Maybe Int
-    let n = V.length assignments
-    thawedassign <- V.unsafeThaw assignments
-    VM.unsafeWrite thawedassign i Nothing
-    if (nInClust > 1) then return ()
-                      else forM_ [0..n-1] (\j ->
-                          (VM.unsafeRead thawedassign j )>>=
-                          (VM.unsafeWrite thawedassign j) . iterfun)
-    V.unsafeFreeze thawedassign 
-
-
 clusterItems :: Partition -> Stims -> [Stims]
 clusterItems assignments stims = takeWhile (not . V.null) clusters
   where
