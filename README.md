@@ -19,7 +19,7 @@ to install). If you still get import errors after installing all the required
 packages, that probably means I forgot one so email me and I will update the
 list.
 
-Runinng the sims
+Running the sims
 ----------------
 
 Code in the fit\_glc.R file wraps the model. Sourcing this file from inside R

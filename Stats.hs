@@ -49,7 +49,6 @@ tPosterior prior sample  = (pdfFun, mui)
     n = fromIntegral $ V.length sample
     (mu0, sigma0, alpha0, lambda0) = prior
 
--- NOTE should really be called Bernoulli not binomial.
 bernoulliPosterior :: [Double] -> PDFFromSample
 bernoulliPosterior alphas sample = (pdfFun, pdfFun (Just 1))
   where
