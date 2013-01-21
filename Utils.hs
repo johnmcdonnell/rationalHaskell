@@ -13,7 +13,8 @@ module Utils
     gather,
     vectranspose,
     catMaybeV,
-    inplacewrite
+    inplacewrite,
+    Down (Down)
     ) where
 
 import qualified Data.List as List
@@ -93,4 +94,9 @@ inplacewrite index newval = V.modify modfun
   where
     modfun v = VM.write v index newval
 
+-- | For backwards compatibility 
+newtype Down a = Down a deriving (Eq)
+
+instance Ord a => Ord (Down a) where
+    compare (Down x) (Down y) = y `compare` x
 
