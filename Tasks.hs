@@ -9,7 +9,7 @@ module Tasks (  Task
              ) where
 
 import Data.List (sortBy, transpose)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VI
@@ -132,4 +132,31 @@ mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = do
 
 gridTest :: Stims
 gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
+
+
+vandistTask :: RandomGen g => (Double, Double) -> Int -> Double -> Rand g Task
+vandistTask (contalpha, contlambda) n proplab = do
+    let nlab = floor $ proplab * (fromIntegral n)
+    let (nperCat, nrem) = quotRem n 2
+    let (perCat, nlabrem) = quotRem nlab 2
+    let unlab = n - nlab
+    when ((fromIntegral nlab) /= (proplab * (fromIntegral n))) $ error "n did not divid into proplab."
+    when (nrem /= 0) $ error $ "n must be divisible by 2. Instead it was " ++ show n ++ "."
+    when (nlabrem /= 0) $ error $ "# of labeled items must be divisible by 2. Instead it was " ++ show nlab ++ "."
+    let meanX1 = 40
+        meanX2 = 60
+        meanN1 = 60
+        meanN2 = 40
+        sd = 11.88
+        rho = 0.99
+    xs <- map ((++[Just 0]) . (map Just)) <$> binormalscov meanX1 meanX2 sd sd rho nperCat
+    ns <- map ((++[Just 1]) . (map Just)) <$> binormalscov meanN1 meanN2 sd sd rho nperCat
+    let newxs = (take perCat xs) ++ (map (\[d1,d2,lab] -> [d1,d2,Nothing]) (drop perCat xs))
+    let newns = (take perCat ns) ++ (map (\[d1,d2,lab] -> [d1,d2,Nothing]) (drop perCat ns))
+    shuffledstims <- shuffleM (newxs ++ newns)
+    let dim1 = map (!!0) shuffledstims
+        dim2 = map (!!1) shuffledstims
+    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- [dim1, dim2], let itemvec = (V.fromList . (map fromJust)) itemset ]
+        binomprior =  bernoulliPosterior [1, 1]
+    return (V.fromList $ map V.fromList shuffledstims, tpriors ++ [binomprior])
 
