@@ -6,6 +6,7 @@ module Tasks (  Task
               , SortOrder (Interspersed, LabeledFirst, LabeledLast)
               , mcdonnellTaskOrdered
               , gridTest
+              , vandistTask
              ) where
 
 import Data.List (sortBy, transpose)
@@ -13,6 +14,7 @@ import Data.Maybe (catMaybes, fromJust)
 import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VI
+import qualified Numeric.LinearAlgebra as LA
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Random
@@ -58,22 +60,28 @@ twodtask params n = do
     items <- shuffleM (concat stims)
     let tpriors = [tPosterior (mean itemvec, stdDev itemvec, 1, 1) | itemset <- (transpose . map catMaybes) items, let itemvec = V.fromList itemset  ]
     return (V.fromList $ map V.fromList items, tpriors)
- 
+
+scal2mat :: LA.Element a => a -> (LA.Matrix a)
+scal2mat x = LA.fromLists [[x]]
+
 zeithamovaMaddox :: (RandomGen g) => (Double, Double) -> Int -> Rand g Task
 zeithamovaMaddox (contalpha, contlambda) n = do
     -- length bimodal
-    let bimodmean1 = 187.5
-    let bimodmean2 = 412.5
-    let bimodsd = 12.5
-    let unimodmean = 45
-    let unimodsd = 15
-    astims <-  map (map Just) <$> binormals bimodmean1 unimodmean bimodsd unimodsd n
-    bstims <- map (map Just) <$> binormals bimodmean2 unimodmean bimodsd unimodsd n
-    items <- shuffleM (astims ++ bstims)
-    let itemswithlabels = V.fromList $ map (\x -> V.snoc (V.fromList x) Nothing) items
-    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- (transpose . (map catMaybes)) items , let itemvec = V.fromList itemset ]
+    let meansA = LA.fromList [187.5, 45]
+        meansB = LA.fromList [412.5, 45]
+        sigmas = (12.5, 12.5)
+        rho = 0
+    astims <- binormals meansA sigmas rho n
+    bstims <- binormals meansB sigmas rho n
+    let withlabels = LA.fromBlocks [[astims, scal2mat $ 0/0], [bstims, scal2mat $ 0/0]]
+    shuffled <- shuffleM $ LA.toLists withlabels
+    let mabify = (\x -> if isNaN x then Nothing else Just x)
+        stims = V.fromList $ map (V.fromList . (map mabify)) shuffled
+    -- let stims = map ((V.snoc Nothing) . V.fromList . (map Just)) shuffled
+    let dims = init $ LA.toColumns withlabels
+        tpriors = [tPosterior (mean dim, stdDev dim, contalpha, contlambda) | dim <- dims]
     let binomprior =  bernoulliPosterior [1, 1]
-    return (itemswithlabels, tpriors ++ [binomprior])
+    return (stims, tpriors ++ [binomprior])
 
 
 randomInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Rand g [a]
@@ -143,20 +151,22 @@ vandistTask (contalpha, contlambda) n proplab = do
     when ((fromIntegral nlab) /= (proplab * (fromIntegral n))) $ error "n did not divid into proplab."
     when (nrem /= 0) $ error $ "n must be divisible by 2. Instead it was " ++ show n ++ "."
     when (nlabrem /= 0) $ error $ "# of labeled items must be divisible by 2. Instead it was " ++ show nlab ++ "."
-    let meanX1 = 40
-        meanX2 = 60
-        meanN1 = 60
-        meanN2 = 40
-        sd = 11.88
+    let meansX = LA.fromList [40, 60]
+        meansN = LA.fromList [60, 40]
+        sigmas = (11.88, 11.88)
         rho = 0.99
-    xs <- map ((++[Just 0]) . (map Just)) <$> binormalscov meanX1 meanX2 sd sd rho nperCat
-    ns <- map ((++[Just 1]) . (map Just)) <$> binormalscov meanN1 meanN2 sd sd rho nperCat
-    let newxs = (take perCat xs) ++ (map (\[d1,d2,lab] -> [d1,d2,Nothing]) (drop perCat xs))
-    let newns = (take perCat ns) ++ (map (\[d1,d2,lab] -> [d1,d2,Nothing]) (drop perCat ns))
-    shuffledstims <- shuffleM (newxs ++ newns)
-    let dim1 = map (!!0) shuffledstims
-        dim2 = map (!!1) shuffledstims
-    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- [dim1, dim2], let itemvec = (V.fromList . (map fromJust)) itemset ]
+    xstims <- binormals meansX sigmas rho nperCat
+    nstims <- binormals meansN sigmas rho nperCat
+    let withlabels = LA.fromBlocks [[debug $ LA.takeRows perCat xstims, scal2mat 0], 
+                                    [LA.dropRows perCat xstims, scal2mat $ 0/0],
+                                    [LA.takeRows perCat nstims, scal2mat 1],
+                                    [LA.dropRows perCat nstims, scal2mat $ 0/0]]
+    shuffled <- shuffleM $ LA.toLists withlabels
+    let mabify = (\x -> if isNaN x then Nothing else Just x)
+        stims = V.fromList $ map (V.fromList . (map mabify)) shuffled
+    let dims = init $ LA.toColumns withlabels
+        tpriors = [tPosterior (mean dim, stdDev dim, contalpha, contlambda) | dim <- dims]
         binomprior =  bernoulliPosterior [1, 1]
-    return (V.fromList $ map V.fromList shuffledstims, tpriors ++ [binomprior])
+    return (stims, tpriors ++ [binomprior])
+
 

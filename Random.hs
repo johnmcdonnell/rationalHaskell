@@ -1,7 +1,6 @@
 module Random (
                normalsM,
                binormals,
-               binormalscov
                ) where
 
 import Control.Monad
@@ -22,15 +21,20 @@ normalsM mu sd = do
     s <- getSplit
     return $ normals' (mu, sd) s
 
-binormalscov :: (RandomGen g) => Double -> Double -> Double -> Double -> Double -> Int -> Rand g [[Double]]
-binormalscov mean1 mean2 sd1 sd2 cov n = do
-    s <- getSplit
-    let samples = (take (n*2)) $ (normals s)
-    let sampleMat = (n LA.>< 2) samples
-    let covmat = LA.fromLists [[sd1, cov], [cov, sd2]]
-    let rotated = sampleMat LA.<> covmat
-    return $ map (zipWith (+) [mean1, mean2]) (LA.toLists rotated)
+-- binormalscov :: (RandomGen g) => Double -> Double -> Double -> Double -> Double -> Int -> Rand g [[Double]]
+-- binormalscov mean1 mean2 sd1 sd2 cov n = do
+--     s <- getSplit
+--     let samples = (take (n*2)) $ (normals s)
+--     let sampleMat = (n LA.>< 2) samples
+--     let covmat = LA.fromLists [[sd1, cov], [cov, sd2]]
+--     let rotated = sampleMat LA.<> covmat
+--     return $ map (zipWith (+) [mean1, mean2]) (LA.toLists rotated)
 
-binormals :: (RandomGen g) => Double -> Double -> Double -> Double -> Int -> Rand g [[Double]]
-binormals mean1 mean2 sd1 sd2 n = binormalscov mean1 mean2 sd1 sd2 0 n
+bivariatecovmat :: (Double, Double) -> Double -> LA.Matrix Double
+bivariatecovmat (sigma1, sigma2) rho = LA.fromLists [[sigma1*sigma1, rho*sigma1*sigma2], [rho*sigma1*sigma2, sigma2*sigma2]]
+
+binormals :: (RandomGen g) => LA.Vector Double -> (Double, Double) -> Double -> Int -> Rand g (LA.Matrix Double)
+binormals means sigmas rho n = do
+    seed <- getRandom
+    return $ LA.gaussianSample seed n means (bivariatecovmat sigmas rho)
 

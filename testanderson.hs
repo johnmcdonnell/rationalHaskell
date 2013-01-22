@@ -48,14 +48,14 @@ runContinuous = do
     (task, distpriors) <- evalRandIO $ twodtask [(mu1, sigma1), (mu2, sigma2)] n
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    partition <- evalRandIO $ andersonSample EncodeActual prior task
+    (partition, guesses) <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 runZeithamova = do
     (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    partition <- evalRandIO $ andersonSample EncodeActual prior task
+    (partition, guesses) <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 -- |These are the simulations for McDonnell et al. (2013)
@@ -84,7 +84,7 @@ runTVTask args = do
     let prior  = (dirichletProcess cparam, distpriors)
     
     -- Now run the model
-    partition <- evalRandIO $ andersonSample encoding prior task
+    (partition, guesses) <- evalRandIO $ andersonSample encoding prior task
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
@@ -101,7 +101,7 @@ runTVTask args = do
     let initialinferences =  runTest prior task partition gridTest
         inferpartition = map snd $ V.toList initialinferences
         partitions = Map.assocs $ countUnique inferpartition
-        largestClusts = map fst $ take 2 $ sortBy (compare `on` (Down . snd)) partitions
+        largestClusts = map fst $ take 2 $ sortBy (compare `on` (Utils.Down . snd)) partitions
         addlabel (i, clust) taskvec = inplacewrite index newstim taskvec
           where
             index = fromJust $ V.elemIndex (Just clust) partition 
@@ -115,10 +115,39 @@ runTVTask args = do
         ret = V.zipWith (\stim (lab, clust) -> "INFER" : (map show (stim ++ [lab])) ++ [show clust]) teststims testInferences
     putStrLn $ printCSV $ V.toList ret
 
+runVandistTask :: [String] -> IO ()
+runVandistTask args = do
+    let cparam = if length args > 0 then read (args!!0) else 1
+        proplab = if length args > 1 then read (args!!1) else 0.5
+        encodearg = if length args > 2 then (args!!3) else "actual"
+    
+        encoding = case encodearg of "guess" -> EncodeGuess
+                                     "softguess" -> EncodeGuessSoft
+                                     otherwise -> EncodeActual
+    
+    (task, distpriors) <- evalRandIO $ vandistTask (1, 1) 800 proplab
+    
+    let prior  = (dirichletProcess cparam, distpriors)
+    
+    -- Now run the model
+    (partition, guesses) <- evalRandIO $ andersonSample encoding prior task
+    
+    -- Dump all those mabies
+    let demabify = V.map (fromMaybe (-9))
+        demabified = V.map demabify task
+        results = map (\(x,Just y) -> V.toList $ V.snoc x (fromIntegral y)) $ (filter (isJust . snd)) $ zip (V.toList demabified) (V.toList partition)
+        resultstrings = map (map show) results
+    
+    -- Print it out
+    putStrLn $ printCSV $ map ("STIM":) resultstrings
+    
+    putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
+
 main = do
     args <- getArgs
     -- runMedinSchaffer
     -- runContinuous
     -- runZeithamova
-    runTVTask args
+    -- runTVTask args
+    runVandistTask args
 

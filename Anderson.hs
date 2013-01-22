@@ -48,7 +48,8 @@ encodeGuess newstim _   = return newstim
 
 -- TODO: Make sure the mapping is correct! Inference prob of .8 should mean .8 chance of being 1!
 encodeGuessSoft :: Stim -> [Double] -> Rand StdGen  Stim
-encodeGuessSoft newstim inference  = encode <$> (getRandom :: Rand StdGen Double)
+encodeGuessSoft newstim []        = return newstim
+encodeGuessSoft newstim inference = encode <$> (getRandom :: Rand StdGen Double)
   where
     encode = (V.snoc (V.init newstim) . makechoice)
     makechoice needle = if prob > needle then Just 1 else Just 0
@@ -57,18 +58,25 @@ encodeGuessSoft newstim inference  = encode <$> (getRandom :: Rand StdGen Double
 
 data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving Show
 
-andersonIterate :: (ClusterPrior, [PDFFromSample]) -> Encoding -> (Partition, Stims) -> (Int, Stim) -> Rand StdGen (Partition, Stims)
-andersonIterate prior encoding (assignments, stims) (i, newstim) = do
+andersonIterate :: (ClusterPrior, [PDFFromSample]) -> Encoding -> (Partition, Stims, [Double]) -> (Int, Stim) -> Rand StdGen (Partition, Stims, [Double])
+andersonIterate prior encoding (assignments, stims, guesses) (i, newstim) = do
     let encodefun = case encoding of EncodeGuess -> encodeGuess
                                      EncodeGuessSoft -> encodeGuessSoft 
                                      EncodeActual -> encodeActual
-    let guess = fst $ infer prior stims assignments newstim
-    encodestim <- encodefun newstim guess
+    
+    let incomplete = V.any isNothing newstim
+    
+    -- Hackish but assume the last is the label
+    let guessstim = V.snoc (V.init newstim) Nothing
+        guess = fst $ infer prior stims assignments guessstim
+    encodestim <- encodefun newstim (if incomplete then guess else [])
+    
     let chosenclust = sampleNext prior stims assignments encodestim
     let retStims = V.snoc stims encodestim -- TODO would be better in place.
     let retAssign = V.modify (\vec -> VM.unsafeWrite vec i (Just chosenclust)) assignments
-    return (retAssign, retStims)
+    return (retAssign, retStims, guesses ++ [head guess])
 
+-- Not yet implemented
 summarizeCluster :: Stims -> Partition -> Int -> String
 summarizeCluster allstims part i = "hi"
   where
@@ -82,16 +90,16 @@ summarizeClusters stims partition = concat $ intersperse "\n" $ map summfun [0..
     nclusts = length $ (nub . catMaybes) $ partList
     partList = V.toList partition
 
-andersonSample ::    Encoding                  -- ^ How to encode items (Use guess or not)
+andersonSample ::   Encoding                  -- ^ How to encode items (Use guess or not)
                  -> (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
                  -> Stims                     -- ^ Task stimuli
-                 -> Rand StdGen Partition
+                 -> Rand StdGen (Partition, [Double]) -- ^ Partition and list of guesses
 andersonSample encoding prior stimuli = do
-    (finalAssign, finalStims) <- V.ifoldl' (\prev i newstim ->
+    (finalAssign, finalStims, guesses) <- V.ifoldl' (\prev i newstim ->
                   prev >>= (flip (andersonIterate prior encoding) (i, newstim)))
-                  (return (assignmentStore, stimStore)) 
+                  (return (assignmentStore, stimStore, [])) 
                   stimuli
-    return finalAssign
+    return (finalAssign, guesses)
   where
     assignmentStore = V.replicate n Nothing
     stimStore = V.empty
