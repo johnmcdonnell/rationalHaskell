@@ -31,6 +31,16 @@ import Stats
 -- Encapsulates the task and its prior.
 type Task = (Stims, [PDFFromSample])
 
+-- Generates priors given a task, the confidences, and a dimension bias.
+-- Only works in the case of two non-label dimensions, unfortunately
+getPriors :: (Double, Double, Double) -> [[Maybe Double]] -> [PDFFromSample]
+getPriors (contalpha, contlambda, bias) stims  = tpriors ++ [binomprior]
+  where
+    expbias = exp bias
+    dims = LA.toColumns $ LA.fromLists $ map ((map fromJust) . init) stims
+    tpriors = [tPosterior (mean dim, (stdDev dim) * multiplier, contalpha, contlambda) | (dim, multiplier) <- zip dims [expbias, 1/expbias]]
+    binomprior =  bernoulliPosterior [1, 1]
+
 medinSchafferTask :: [Double] -> Task
 medinSchafferTask binomAlphas = (medinSchafferStims, andersondists)
   where 
@@ -64,8 +74,8 @@ twodtask params n = do
 scal2mat :: LA.Element a => a -> (LA.Matrix a)
 scal2mat x = LA.fromLists [[x]]
 
-zeithamovaMaddox :: (RandomGen g) => (Double, Double) -> Int -> Rand g Task
-zeithamovaMaddox (contalpha, contlambda) n = do
+zeithamovaMaddoxStims :: (RandomGen g) => Int -> Rand g [[Maybe Double]]
+zeithamovaMaddoxStims n = do
     -- length bimodal
     let meansA = LA.fromList [187.5, 45]
         meansB = LA.fromList [412.5, 45]
@@ -76,13 +86,14 @@ zeithamovaMaddox (contalpha, contlambda) n = do
     let withlabels = LA.fromBlocks [[astims, scal2mat $ 0/0], [bstims, scal2mat $ 0/0]]
     shuffled <- shuffleM $ LA.toLists withlabels
     let mabify = (\x -> if isNaN x then Nothing else Just x)
-        stims = V.fromList $ map (V.fromList . (map mabify)) shuffled
-    -- let stims = map ((V.snoc Nothing) . V.fromList . (map Just)) shuffled
-    let dims = init $ LA.toColumns withlabels
-        tpriors = [tPosterior (mean dim, stdDev dim, contalpha, contlambda) | dim <- dims]
-    let binomprior =  bernoulliPosterior [1, 1]
-    return (stims, tpriors ++ [binomprior])
+    return $ map (map mabify) shuffled
 
+zeithamovaMaddox :: (RandomGen g) => (Double, Double, Double) -> Int -> Rand g Task
+zeithamovaMaddox priorparams n = do
+    stims <- zeithamovaMaddoxStims n
+    let priors = getPriors priorparams stims
+    let vectorizedstims = V.fromList $ (map V.fromList) $ stims
+    return (vectorizedstims, priors)
 
 randomInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Rand g [a]
 randomInSquare xbounds ybounds = do
@@ -93,8 +104,8 @@ randomInSquare xbounds ybounds = do
 randomsInSquare :: (RandomGen g, Fractional a, Random a) => (a, a) -> (a, a) -> Int -> Rand g [[a]]
 randomsInSquare xbounds ybounds n = sequence $ replicate n (randomInSquare xbounds ybounds)
 
-mcdonnellTask :: RandomGen g => (Double, Double) -> Int -> Int -> Rand g Task
-mcdonnellTask (contalpha, contlambda) n nlab = do
+mcdonnellTaskStims :: RandomGen g => Int -> Int -> Rand g [[Maybe Double]]
+mcdonnellTaskStims n nlab = do
     let (boxmultiplier, nrem) = quotRem n 28
     let (perCat, nlabrem) = quotRem nlab 2
     let unlab = n - nlab
@@ -110,10 +121,13 @@ mcdonnellTask (contalpha, contlambda) n nlab = do
     let labs = (replicate perCat $ Just 0) ++ (replicate unlab Nothing) ++ (replicate perCat $ Just 1)
     let stims =  zipWith (\loc maybelab -> (map Just loc) ++ [maybelab])  stimlocs labs
     shuffledstims <- shuffleM stims
-    let tpriors = [tPosterior (mean itemvec, stdDev itemvec, contalpha, contlambda) | itemset <- transpose stimlocs, let itemvec = V.fromList itemset ]
-    let binomprior =  bernoulliPosterior [1, 1]
-    return (V.fromList $ map V.fromList shuffledstims, tpriors ++ [binomprior])
+    return shuffledstims
 
+mcdonnellTask :: RandomGen g => (Double, Double, Double) -> Int -> Int -> Rand g Task
+mcdonnellTask priorparams n nlab = do
+    stims <- mcdonnellTaskStims n nlab
+    let priors = getPriors priorparams stims
+    return (V.fromList $ (map V.fromList) $ stims, priors)
 
 labfirstcompare :: Ord a => Maybe a -> Maybe a -> Ordering
 labfirstcompare (Just _)  (Nothing) = LT
@@ -127,10 +141,10 @@ lablastcompare _         _         = EQ
 
 data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show)
 
-mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double) -> Int -> Int -> Rand g Task
+mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double, Double) -> Int -> Int -> Rand g Task
 mcdonnellTaskOrdered Interspersed priors n nlab = mcdonnellTask priors n nlab
-mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = do
-    (task, priors) <- mcdonnellTask (contalpha, contlambda) n nlab
+mcdonnellTaskOrdered order priorparams n nlab = do
+    (task, priors) <- mcdonnellTask priorparams n nlab
     let sortedtask = V.modify tasksort task
     return (sortedtask, priors)
   where
@@ -140,7 +154,6 @@ mcdonnellTaskOrdered order (contalpha, contlambda) n nlab = do
 
 gridTest :: Stims
 gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
-
 
 vandistTask :: RandomGen g => (Double, Double) -> Int -> Double -> Rand g Task
 vandistTask (contalpha, contlambda) n proplab = do

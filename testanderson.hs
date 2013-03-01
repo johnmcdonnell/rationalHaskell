@@ -52,7 +52,7 @@ runContinuous = do
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 runZeithamova = do
-    (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1) 100
+    (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1, 0) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
     (partition, guesses) <- evalRandIO $ andersonSample EncodeActual prior task
@@ -78,7 +78,7 @@ runTVTask args = do
     
     -- Set up priors
     let filterfun = if nounlab then V.filter (isJust . V.last) else id
-    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (1, 1) (28*4) nlab
+    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (1, 1, 0) (28*4) nlab
     -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
     
     let prior  = (dirichletProcess cparam, distpriors)
