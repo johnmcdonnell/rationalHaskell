@@ -41,8 +41,10 @@ If you don't use vim, I'd recommend using the excellent
 Required Packages
 -----------------
 
+- [hmatrix](http://hackage.haskell.org/package/hmatrix)
 - [vector](http://hackage.haskell.org/package/vector)
 - [vector-algorithms](http://hackage.haskell.org/package/vector-algorithms)
-- [random-shuffle](http://hackage.haskell.org/package/random-shuffle)
 - [statistics](http://hackage.haskell.org/package/statistics)
-- [normaldistribution](http://hackage.haskell.org/package/normaldistribution)
+- [random-shuffle](http://hackage.haskell.org/package/random-shuffle)
+- [csv](http://hackage.haskell.org/package/csv)
+
