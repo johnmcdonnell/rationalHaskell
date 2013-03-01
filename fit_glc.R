@@ -12,6 +12,11 @@ library(doMC)
 registerDoMC()
 # }}}1
 
+# {{{1 Helper functions
+almost_zero <- function(x) abs(x) < .00000001
+almost_equal <- function(x, y) almostzero(x-y)
+# }}}1
+
 # {{{1 General statistics
 bic.general <- function(negloglik, n, k) log( n )*k - 2*negloglik
 # }}}1
@@ -316,9 +321,9 @@ runs <- expand.grid(nlab=c(0,4,16,-1),
                     encoding=c("actual"))
 runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
 
-nreps <- 1000
-#sims <- read.csv("sims.csv")
-sims <- run_sims(runs, nreps)
+nreps <- 5000
+sims <- read.csv("sims.csv")
+#sims <- run_sims(runs, nreps)
 sims$nlab[sims$nlab==-1] <- Inf
 
 counts <- ddply( sims, .(nlab, cparam, tau, order, encoding), function(x) summary(x$BestFit) )
@@ -335,11 +340,31 @@ counts.melted <- melt(counts,
                       value.name="count")
 
 counts.melted$groupingparam <- do.call(paste, c(counts.melted[c("bestfit", "encoding")], sep = ":"))
+counts.melted$cparam <- 1/(counts.melted$cparam+1) # Convert to Anderson notation
 
 print(ggplot(counts.melted) +
       geom_line(aes(x=factor(nlab), y=count, group=groupingparam, linetype=encoding, colour=bestfit)) + 
       facet_grid(cparam~order, labeller=label_both) +
-      labs(title=paste(nreps, "simulated runs of the Anderson Rational model")))
+      labs(title=paste(nreps, "simulated runs of the Anderson rational model")))
+# }}}1
+
+# {{{1 Plots for paper
+# {{{2 Experiment 1
+exp1.sims <- subset(counts.melted, almost_equal(counts.melted$cparam, .3) & order=="interspersed")
+
+ggplot(exp1.sims) +
+  geom_bar(aes(x=factor(nlab), y=count), stat="identity") + 
+  facet_wrap( ~ bestfit )
+ggsave("exp1sims.pdf")
+# }}}2
+# {{{2 Experiment 2
+exp2.sims <- subset(counts.melted, almost_equal(counts.melted$cparam, .3) & order!="interspersed")
+
+ggplot(exp2.sims) +
+  geom_bar(aes(x=factor(nlab), y=count), stat="identity") + 
+  facet_grid( order ~ bestfit )
+ggsave("exp2sims.pdf")
+# }}}2
 # }}}1
 
 # vim: foldmethod=marker
