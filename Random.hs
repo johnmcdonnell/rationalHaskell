@@ -1,6 +1,6 @@
-module Random (
+module Random (normalM,
                normalsM,
-               binormals,
+               binormals
                ) where
 
 import Control.Monad
@@ -14,11 +14,14 @@ import qualified Numeric.LinearAlgebra as LA
 
 import Utils
 
-normalsM :: RandomGen g => Double -> Double -> Rand g [Double]
-normalsM mu sd = do
+normalM :: RandomGen g => Double -> Double -> Rand g Double
+normalM mu sd = do
     let dist = normalDistr mu sd
-    randoms <- getRandomRs (0, 1)
-    return $ map (quantile dist) randoms
+    random <- getRandomR (0, 1)
+    return $ quantile dist random
+
+normalsM :: RandomGen g => Double -> Double -> Rand g [Double]
+normalsM mu sd = (sequence . repeat) $ normalM mu sd
 
 bivariatecovmat :: (Double, Double) -> Double -> LA.Matrix Double
 bivariatecovmat (sigma1, sigma2) rho = LA.fromLists [[sigma1*sigma1, rho*sigma1*sigma2], [rho*sigma1*sigma2, sigma2*sigma2]]
