@@ -47,4 +47,5 @@ Required Packages
 - [statistics](http://hackage.haskell.org/package/statistics)
 - [random-shuffle](http://hackage.haskell.org/package/random-shuffle)
 - [csv](http://hackage.haskell.org/package/csv)
+- [cmdargs](http://hackage.haskell.org/package/cmdargs)
 

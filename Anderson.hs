@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Anderson (andersonSample,
                 Encoding (EncodeActual, EncodeGuess, EncodeGuessSoft)) where
@@ -14,6 +15,7 @@ import Control.Applicative
 import Control.Monad.ST
 import System.Random
 import Statistics.Sample
+import System.Console.CmdArgs
 
 import Stats
 import Rational
@@ -25,6 +27,7 @@ sampleNext (clusterPrior, distributions) stimuli assignments newstim = assignmen
   where 
     assignment = (V.maxIndex . V.fromList) posterior
     posterior = clusterPosterior clusterPrior distributions stimuli assignments newstim
+
 
 -- andersonSample :: (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
 --                -> Stims                     -- ^ Task stimuli
@@ -56,7 +59,7 @@ encodeGuessSoft newstim inference = encode <$> (getRandom :: Rand StdGen Double)
     prob = case inference of [x] -> x
                              otherwise -> 0.5
 
-data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving Show
+data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving (Show, Data, Typeable)
 
 andersonIterate :: (ClusterPrior, [PDFFromSample]) -> Encoding -> (Partition, Stims, [Double]) -> (Int, Stim) -> Rand StdGen (Partition, Stims, [Double])
 andersonIterate prior encoding (assignments, stims, guesses) (i, newstim) = do

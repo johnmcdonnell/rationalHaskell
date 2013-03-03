@@ -21,6 +21,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Vector as V
 import Data.Vector (Vector, (!))
+import qualified Data.Foldable as Fold
 import qualified Data.Vector.Mutable as VM
 import Debug.Trace
 import Data.Function (on)
@@ -47,7 +48,7 @@ both f = f *** f
 -- * Things that should be in Data.List
 
 -- | Returns (argmax, max)
-maxWithArg :: Ord a => [a] -> (Int, a)
+maxWithArg :: (Ord a) => [a] -> (Int, a)
 maxWithArg items = List.foldl1' compare loopvals
   where
     compare opt next = if (snd next) > (snd opt) then next else opt
@@ -70,8 +71,8 @@ gather :: Ord a => [a] -> [[a]]
 gather = gatherBy id
 
 -- | Returns map from each value to how often it occured.
-countUnique :: Ord a => [a] -> Map.Map a Int
-countUnique = List.foldl' additem Map.empty
+countUnique :: (Fold.Foldable f, Ord a) => f a -> Map.Map a Int
+countUnique = Fold.foldl' additem Map.empty
   where
     additem sofar newkey = Map.insertWith (+) newkey 1 sofar
 

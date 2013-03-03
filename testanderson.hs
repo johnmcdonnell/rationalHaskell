@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 
 -- import qualified Control.Monad.State as State
 import Data.List (sortBy)
@@ -11,7 +12,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad.ST
 import Control.Monad.Random
-import System.Environment (getArgs)
+import System.Console.CmdArgs
 import Text.CSV
 
 import Utils
@@ -25,7 +26,10 @@ import Tasks
 runTest :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stims -> Vector (Double, Int)
 runTest prior stimuli assignments = V.map getpred
   where
-    getpred = (second (argmax)) . (first head) . (infer prior stimuli assignments)
+    getpred = takeBestCluster . takePrediction . rawpred
+    takeBestCluster = second (argmax . init)
+    takePrediction = first head
+    rawpred = infer prior stimuli assignments
 
 -- * Run simulation on the various tasks
 
@@ -59,29 +63,16 @@ runZeithamova = do
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 -- |These are the simulations for McDonnell et al. (2013)
-runTVTask :: [String] -> IO ()
-runTVTask args = do
-    let cparam = if length args > 0 then read (args!!0) else 1
-        maxlab = 16
-        (nlab, nounlab) = if length args > 1 then (\x -> if x<0 then (maxlab, True) else (x, False) ) $ read (args!!1) 
-                                             else (maxlab, False)
-        orderarg = if length args > 2 then (args!!2) else "interspersed"
-        encodearg = if length args > 3 then (args!!3) else "actual"
-    
-        order = case orderarg of "interspersed" -> Interspersed
-                                 "labfirst"     -> LabeledFirst
-                                 "lablast"      -> LabeledLast
-                                 otherwise      -> error $ "Inappropriate order: " ++ orderarg ++ "; order should be one of interspersed, labfirst, lablast."
-        encoding = case encodearg of "guess" -> EncodeGuess
-                                     "softguess" -> EncodeGuessSoft
-                                     otherwise -> EncodeActual
+runTVTask :: ModelArgs -> IO ()
+runTVTask (ModelArgs alphaparam order encoding bias nlabarg proplab) = do
+    let maxlab = 16
+        (nlab, nounlab) = if nlabarg < 0 then (maxlab, True) else (nlabarg, False)
     
     -- Set up priors
     let filterfun = if nounlab then V.filter (isJust . V.last) else id
-    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (1, 1, 0) (28*4) nlab
-    -- print $ sortBy (compare `on` fst) $ map (\((Just bimod):(Just unimod):xs) -> (bimod, unimod)) task
+    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (1, 1, bias) (28*4) nlab
     
-    let prior  = (dirichletProcess cparam, distpriors)
+    let prior  = (dirichletProcess alphaparam, distpriors)
     
     -- Now run the model
     (partition, guesses) <- evalRandIO $ andersonSample encoding prior task
@@ -98,9 +89,9 @@ runTVTask args = do
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
     
     -- If there were no labels, we have to assume they are associated with the largest clusters.
-    let initialinferences =  runTest prior task partition gridTest
+    let initialinferences = runTest prior task partition gridTest
         inferpartition = map snd $ V.toList initialinferences
-        partitions = Map.assocs $ countUnique inferpartition
+        partitions = Map.toList $ countUnique inferpartition
         largestClusts = map fst $ take 2 $ sortBy (compare `on` (Utils.Down . snd)) partitions
         addlabel (i, clust) taskvec = inplacewrite index newstim taskvec
           where
@@ -115,19 +106,12 @@ runTVTask args = do
         ret = V.zipWith (\stim (lab, clust) -> "INFER" : (map show (stim ++ [lab])) ++ [show clust]) teststims testInferences
     putStrLn $ printCSV $ V.toList ret
 
-runVandistTask :: [String] -> IO ()
-runVandistTask args = do
-    let cparam = if length args > 0 then read (args!!0) else 1
-        proplab = if length args > 1 then read (args!!1) else 0.5
-        encodearg = if length args > 2 then (args!!3) else "actual"
-    
-        encoding = case encodearg of "guess" -> EncodeGuess
-                                     "softguess" -> EncodeGuessSoft
-                                     otherwise -> EncodeActual
-    
+runVandistTask :: ModelArgs -> IO ()
+runVandistTask (ModelArgs alphaparam order encoding bias nlabarg proplab) = do
+    -- TODO: Integrate this: (task, distpriors) <- evalRandIO $ vandistTask (1, 1, bias) 800 proplab
     (task, distpriors) <- evalRandIO $ vandistTask (1, 1) 800 proplab
     
-    let prior  = (dirichletProcess cparam, distpriors)
+    let prior  = (dirichletProcess alphaparam, distpriors)
     
     -- Now run the model
     (partition, guesses) <- evalRandIO $ andersonSample encoding prior task
@@ -143,11 +127,36 @@ runVandistTask args = do
     
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
 
+data ModelArgs = ModelArgs {
+           alphaparam :: Double,
+           order :: SortOrder,
+           encoding :: Encoding,
+           bias :: Double,
+           nlab :: Int,
+           proplab :: Double
+           } deriving (Data, Show, Typeable)
+
+modelArgs = ModelArgs {
+           alphaparam = 1         &= help "Dirichlet parameter (alpha)",
+           order = enum [Interspersed, 
+                         LabeledFirst, 
+                         LabeledLast],
+           encoding = enum [EncodeActual, 
+                            EncodeGuess, 
+                            EncodeGuessSoft],
+           bias = 0               &= help "Bias. Valence determines direction",
+           nlab = 16              &= help "# of labeled items, <0 -> 16-all-labeled; applies only to TVTask",
+           proplab = 0.5          &= help "Proporation of items labeled, applies only to Vandist task"
+           } 
+           &= program "testanderson" 
+           &= summary "Anderson Rational Model" 
+           &= details ["Runs a simulation of the Anderson Rational Model."]
+
 main = do
-    args <- getArgs
+    opts <- cmdArgs modelArgs
     -- runMedinSchaffer
     -- runContinuous
     -- runZeithamova
-    -- runTVTask args
-    runVandistTask args
+    runTVTask opts
+    -- runVandistTask opts
 

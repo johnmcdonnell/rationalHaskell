@@ -83,7 +83,9 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
 
 -- | For all missing items in the querystim, infers the most likely possible
 -- | outcome, taking all possible cluster assignments into account.
-infer :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stim -> ([Double], [Double])
+infer :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition
+         -> Stim       -- ^ Stimulus being queried.
+         -> ([Double], [Double]) -- ^ (List of predictions for the dimension features, and List of posteriors for the clusters, INCLUDING EMPTY)
 infer (cprior, distributions) stimuli assignments querystim = (prediction, post)
   where
     prediction = map inferDim queryDims
@@ -92,7 +94,6 @@ infer (cprior, distributions) stimuli assignments querystim = (prediction, post)
     clusters = clusterItems assignments stimuli
     queryDims = V.toList $ V.map snd $ V.filter (isNothing . fst) $ V.zip querystim (V.enumFromN 0 (V.length querystim))
     post = clusterPosterior cprior distributions stimuli assignments querystim
-
 
 -- | Cluster centroids for all clusters in all dimensions
 summarizeClusters :: [PDFFromSample] -> Stims -> Partition -> [[Double]]

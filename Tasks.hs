@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Tasks (  Task
               , medinSchafferTask
               , onedtask
@@ -20,6 +22,7 @@ import Control.Monad
 import Control.Monad.Random
 import System.Random.Shuffle
 import Statistics.Sample
+import System.Console.CmdArgs
 
 import Utils
 import Random
@@ -129,17 +132,17 @@ mcdonnellTask priorparams n nlab = do
     let priors = getPriors priorparams stims
     return (V.fromList $ (map V.fromList) $ stims, priors)
 
-labfirstcompare :: Ord a => Maybe a -> Maybe a -> Ordering
+labfirstcompare :: Maybe a -> Maybe a -> Ordering
 labfirstcompare (Just _)  (Nothing) = LT
 labfirstcompare (Nothing) (Just _)  = GT
 labfirstcompare _         _         = EQ
 
-lablastcompare :: Ord a => Maybe a -> Maybe a -> Ordering
+lablastcompare :: Maybe a -> Maybe a -> Ordering
 lablastcompare (Nothing) (Just _)  = LT
 lablastcompare (Just _)  (Nothing) = GT
 lablastcompare _         _         = EQ
 
-data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show)
+data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show, Data, Typeable)
 
 mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double, Double) -> Int -> Int -> Rand g Task
 mcdonnellTaskOrdered Interspersed priors n nlab = mcdonnellTask priors n nlab
