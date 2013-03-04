@@ -17,7 +17,9 @@ be able to install them by typing
 at the command line (where package-name is the name of the package you wanted
 to install). If you still get import errors after installing all the required
 packages, that probably means I forgot one so email me and I will update the
-list.
+list. To get usage instructions for the binary, type:
+
+    ./testanderson --help
 
 Running the sims
 ----------------
