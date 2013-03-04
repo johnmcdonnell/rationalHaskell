@@ -15,6 +15,23 @@ registerDoMC()
 # {{{1 Helper functions
 almost_zero <- function(x) abs(x) < .00000001
 almost_equal <- function(x, y) almostzero(x-y)
+
+list.to.args <- function(arglist) {
+  # Syntax:
+  # list.to.args(list(x=2, thisarg="hithere", arg=NA))
+  # results in "--x=2 --thisarg=hithere --arg"
+  args <- list()
+  for (arg in names(arglist)) {
+    val <- arglist[[arg]]
+    if (is.na(val)) {
+      args[[arg]] <- paste0("--", arg)
+    } else {
+      args[[arg]] <- paste0("--", arg, "=", val)
+    }
+  }
+  do.call(paste, args)
+}
+
 # }}}1
 
 # {{{1 General statistics
@@ -75,7 +92,7 @@ compare.models <- function(loglik0, loglik1) {
         warning( "Restricted model better fit than full model. Could be a numerical error." )
         return( F )
     }
-    anova.glc( loglik0, loglik1 ) < alpha
+    anova.glc(loglik0, loglik1) < alpha
 }
 
 
@@ -99,21 +116,18 @@ fits.table <- function(df, withplot=F) {
     
     labcond <- paste( unlab, nlab, order, sep='.' )
     
-    if (length( unique ( df$resp ) ) < 2) {
+    if (length(unique(df$resp)) < 2) {
         warning( paste("always gave the same response.") )
-        return (
-            data.frame(BestFit="Null", BestFitOne="Null", Used="Null",
-                        unimodcoeff=0, bimodcoeff=0, twodAngle=-999,
-                        twodBimod=0, twodNoise=0, twodBias=1,
-                        labcond=labcond, unlab=unlab,
-                        nlab=nlab, order=order )
-            )
+        return data.frame(BestFit="Null", BestFitOne="Null", Used="Null",
+                          unimodcoeff=0, bimodcoeff=0, twodAngle=-999,
+                          twodBimod=0, twodNoise=0, twodBias=1, labcond=labcond,
+                          unlab=unlab, nlab=nlab, order=order)
     }
     model.formulas <- list(Unimodal = resp ~ unimod,
                            Bimodal = resp ~ bimod,
                            "2D" = resp ~ bimod + unimod)
     fit.glc <- function(form) {
-        model.fit <- glc( form, data=df )
+        model.fit <- glc(form, data=df)
         if ( model.fit$par$noise == 10 ) {
             df <- attr(model.fit$logLik, "df")
             model.fit$logLik <- -Inf 
@@ -121,7 +135,7 @@ fits.table <- function(df, withplot=F) {
         }
         model.fit
     }
-    glc.fits <- llply( model.formulas, fit.glc )
+    glc.fits <- llply(model.formulas, fit.glc)
     
     # Record oned coeffs # TODO may not be working
     unimodcoeff <- glc.fits$Unimodal$par$coeffs
@@ -135,7 +149,7 @@ fits.table <- function(df, withplot=F) {
     twod.bias <- glc.fits$"2D"$par$bias
     
     # If we had to pick a 1D rule, which is it?
-    if ( compare.models( logLik(glc.fits$Bimodal), logLik(glc.fits$Unimodal)) ) {
+    if (compare.models(logLik(glc.fits$Bimodal), logLik(glc.fits$Unimodal))) {
         used.index <- 1
     } else { used.index <- 2 }
     used <- labels[[used.index]]
@@ -184,122 +198,124 @@ softmax_binomial <- function(pfalse, tau) {
   runif(1)>odds_false
 }
 
-run_anderson_once <- function(...) {
+run_anderson_once <- function(alpha, nlab, order, encoding, bias) {
+  # Get args
+  arglist <- list()
+  arglist$nlab <- nlab
+  arglist$alpha <- alpha
+  arglist$bias <- bias
+  arglist[[order]] <- NA
+  arglist[[encoding]] <- NA
+  
   output_columns <- c("type","bimod","unimod","label","clust")
-  command <- paste("./testanderson", ...)
+  command <- paste("./testanderson", list.to.args(arglist))
+  print(command)
   read.csv(pipe(command), col.names=output_columns, header=F)
 }
 # }}}1
 
 # {{{1 Simulation code
-simulate_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", tau=.05, plotting=F, echo=F) {
-  resps <- run_anderson_once(cparam, nlab, order, encoding)
-  inferences <- subset(resps, type=="INFER")
-  inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
-  if (echo) { print( inferences) }
-  if (plotting) {
-    fit <- glc(resp ~ bimod + unimod, data=inferences )
-    theplot <- ggplot(inferences)
-    theplot <- theplot  + geom_point(aes(x=bimod, y=unimod, colour=label))
-    intercept <- -fit$par$bias / fit$par$coeff[2]
-    slope <- -fit$par$coeff[1]/fit$par$coeff[2] 
-    #plot( unimod ~ bimod, data=subset(inferences, label==F), col='blue' )
-    #points( unimod ~ bimod, data=subset(inferences, label==T), col='red' )
-    #abline( a=intercept, b=slope )
-    theplot <- theplot + geom_abline(intercept=intercept, slope=slope)
-    print(theplot)
-  }
+simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0, tau=.05, plotting=F, echo=F) {
+    resps <- run_anderson_once(alpha, nlab, order, encoding, bias)
+    inferences <- subset(resps, type=="INFER")
+    inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
+    if (echo) { print( inferences) }
+    if (plotting) {
+        theplot <- ggplot(inferences)
+        theplot <- theplot  + geom_point(aes(x=bimod, y=unimod, colour=label))
+        fit <- try(glc(resp ~ bimod + unimod, data=inferences))
+        if (class(fit) != "try-error") {
+            intercept <- -fit$par$bias / fit$par$coeff[2]
+            slope <- -fit$par$coeff[1]/fit$par$coeff[2] 
+            theplot <- theplot + geom_abline(intercept=intercept, slope=slope)
+        }
+        print(theplot)
+    }
+    # Prepping for use in fits.table
+    inferences$alllab <- "false"
+    inferences$order <- order
+    inferences$nlab <- nlab
+    inferences$encoding <- encoding
+
+    fits.table(inferences)
+}
+
+plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0) {
+    resps <- run_anderson_once(alpha, nlab, order, encoding, bias)
+    all.stims <- subset(resps, type=="STIM")
+    stims <- subset(all.stims, bimod>0 & unimod>0 ) # Remove invisible
+    # BUG somtimes there is no cluster assigned number 0.
+    stopifnot( min( stims$clust )==0 )
+    clusts <- subset(resps, type=="CLUST")
+    clusts$n <- daply( all.stims, .(clust), nrow )
+    inferences <- subset(resps, type=="INFER")
+    if (length(unique(stims$label)) == 3) labels <- c("unlabeled", "ch1", "ch2")
+    else if (length(unique(stims$label)) == 2) labels <- c("ch1", "ch2")
+    else if (length(unique(stims$label)) == 1) labels <- c("unlabeled")
+    stims$label <- factor(stims$label, labels=labels)
+    ggplot(stims) + 
+        geom_point( aes(y=unimod, x=bimod, shape=label) , size=1) + 
+       geom_point(data=inferences, aes(y=unimod, x=bimod, colour=label-.5) , size=1) + 
+       #geom_path(aes(x=bimod, y=unimod, alpha=1), arrow=arrow(type="closed", length=unit(.25,"inches"), angle=15)) +
+       geom_point(data=clusts, aes(y=unimod, x=bimod, colour=label-.5, shape="cluster", size=n) ) +
+       scale_colour_gradient2()
+}
+
+cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", bias=0, firstnclusts=1) {
+   resps <- run_anderson_once(cparam, nlab, order, encoding, bias)
+   all.stims <- subset(resps, type=="INFER")
+   clustlengths <- rev(sort(daply( all.stims, .(clust), nrow )))
+   nclusts <- length(unique(all.stims$clust))
+   if (nclusts < firstnclusts) firstnclusts <- nclusts
+   sum(clustlengths[1:firstnclusts]) / sum(clustlengths)
+}
+
+test.clust.proportion <- function() {
+   cluster_proportion(cparam=1, nlab=0, order="interspersed", firstnclusts=2)
   
-  # Prepping for use in fits.table
-  inferences$alllab <- "false"
-  inferences$order <- order
-  inferences$nlab <- nlab
-  inferences$encoding <- encoding
-  
-  fits.table(inferences)
+   clustprops <- ldply(list(.75, 1, 1.8, .7/.3), 
+                       function(cparam) data.frame(cparam=paste("c =", cparam), proportion=replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))), 
+                       .parallel=T)
+   ggplot(clustprops) + 
+   geom_histogram(aes(x=proportion)) + 
+   facet_grid(~cparam) + xlim(c(0,1.01)) + 
+   labs(title="Dominance of the 2 largest clusters at different clustering parameters (c=infinity -> infinite cluster).",
+          y="Count (out of 1000)",
+          x="Proportion of test items falling into the 2 largest clusters.")
+   ggsave("clustproportions.pdf")
 }
 
-plot_anderson <- function(cparam=1, nlab=16, order="interspersed", encoding="actual") {
-  resps <- run_anderson_once(cparam, nlab, order, encoding)
-  all.stims <- subset(resps, type=="STIM")
-  stims <- subset(all.stims, bimod>0 & unimod>0 ) # Remove invisible
-  # BUG somtimes there is no cluster assigned number 0.
-  stopifnot( min( stims$clust )==0 )
-  clusts <- subset(resps, type=="CLUST")
-  clusts$n <- daply( all.stims, .(clust), nrow )
-  inferences <- subset(resps, type=="INFER")
-  if (length(unique(stims$label)) == 3) labels <- c("unlabeled", "ch1", "ch2")
-  else if (length(unique(stims$label)) == 2) labels <- c("ch1", "ch2")
-  else if (length(unique(stims$label)) == 1) labels <- c("unlabeled")
-  stims$label <- factor(stims$label, labels=labels)
-  ggplot(stims) + 
-    geom_point( aes(y=unimod, x=bimod, shape=label) , size=1) + 
-    geom_point(data=inferences, aes(y=unimod, x=bimod, colour=label-.5) , size=1) + 
-    #geom_path(aes(x=bimod, y=unimod, alpha=1), arrow=arrow(type="closed", length=unit(.25,"inches"), angle=15)) +
-    geom_point(data=clusts, aes(y=unimod, x=bimod, colour=label-.5, shape="cluster", size=n) ) +
-    scale_colour_gradient2()
-}
 
-cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", firstnclusts=1) {
-  resps <- run_anderson_once(cparam, nlab, order, encoding)
-  all.stims <- subset(resps, type=="INFER")
-  clustlengths <- rev(sort(daply( all.stims, .(clust), nrow )))
-  nclusts <- length(unique(all.stims$clust))
-  if (nclusts < firstnclusts) firstnclusts <- nclusts
-  sum(clustlengths[1:firstnclusts]) / sum(clustlengths)
-}
-
-cluster_proportion(cparam=1, nlab=0, order="interspersed", firstnclusts=2)
-
-clustprops <- ldply(list(.75, 1, 1.8, .7/.3), 
-                    function(cparam) data.frame(cparam=paste("c =", cparam), proportion=replicate(1000, cluster_proportion(cparam=cparam, nlab=0, order="interspersed", firstnclusts=2))), 
-                    .parallel=T)
-ggplot(clustprops) + 
-geom_histogram(aes(x=proportion)) + 
-facet_grid(~cparam) + xlim(c(0,1.01)) + 
-labs(title="Dominance of the 2 largest clusters at different clustering parameters (c=infinity -> infinite cluster).",
-       y="Count (out of 1000)",
-       x="Proportion of test items falling into the 2 largest clusters.")
-ggsave("clustproportions.pdf")
-
-nrow(subset(head(clustprops, 1000), proportion==1))
-
-ddply( clustprops, .(cparam), summarise, mean(proportion))
-
-
-plot_anderson(cparam=1, order="interspersed")
-plot_anderson(cparam=.7/.3, order="interspersed")
+#plot_anderson(cparam=1, order="interspersed")
+#plot_anderson(cparam=.7/.3, order="interspersed")
 #plot_anderson(cparam=.7/.3, nlab=4, order="interspersed")
 #plot_anderson(cparam=.7/.3, order="lablast" )
 #plot_anderson(cparam=.7/.3, order="labfirst" )
 
 run_sims <- function(runs, nreps) {
-  #ntotal <- nrow(runs) * nreps
-  #pb <- txtProgressBar(min=0, max=ntotal, style=3)
-  #count <- 0
-  
-  all_sims <- ddply(runs, names(runs), function(df) {
-            attach(df[1,]) # Yes yes I know attaching is a dirty dirty thing to do.
-            count <- 0
-            ret <- data.frame()
-            while ( count < nreps ) {
-              this_sim <- try(simulate_anderson(cparam, nlab, order, encoding, tau, plotting=F))
-              if (class(this_sim) == "try-error") next # Sometimes the call fails.
-              count <- count + 1
-              ret <- rbind( ret, this_sim )
-            }
-            ret
-            #count <- count + nreps
-            #setTxtProgressBar(pb, count)
-                      }, .parallel=T)
-  
-  write.csv(all_sims, file="sims.csv")
-  all_sims
+   all_sims <- ddply(runs, names(runs), function(df) {
+             attach(df[1,]) # Yes yes I know attaching is a dirty dirty thing to do.
+             count <- 0
+             ret <- data.frame()
+             while ( count < nreps ) {
+               this_sim <- try(simulate_anderson(cparam, nlab, order, encoding, tau, plotting=F))
+               if (class(this_sim) == "try-error") next # Sometimes the call fails.
+               count <- count + 1
+               ret <- rbind( ret, this_sim )
+             }
+             ret
+             #count <- count + nreps
+             #setTxtProgressBar(pb, count)
+                       }, .parallel=T)
+   
+   write.csv(all_sims, file="sims.csv")
+   all_sims
 }
 
 
 # {{{2 Try one run
-simulate_anderson(1, 0, plotting=T, echo=T)
+plot_anderson(alpha=1, nlab=16)
+simulate_anderson(1, 0, bias=.3, plotting=T, echo=T)
 
 resps <- run_anderson_once(1, 16, "interspersed", "actual")
 
@@ -315,15 +331,16 @@ clustcounts['1']
 
 # {{{1 Run sims across conditions.
 runs <- expand.grid(nlab=c(0,4,16,-1), 
-                    order=c("interspersed", "labfirst", "lablast"),
-                    cparam=c(.75, 1, 1.8, .7/.3),
+                    order=c("interspersed", "labeledfirst", "labeledlast"),
+                    alpha=c(.75, 1, 1.8, .7/.3),
                     tau=c(.05), 
-                    encoding=c("actual"))
+                    encoding=c("encodeactual"))
 runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
 
 nreps <- 5000
-sims <- read.csv("sims.csv")
-#sims <- run_sims(runs, nreps)
+#sims <- read.csv("sims.csv")
+ofile <- "bias.csv"
+sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
 
 counts <- ddply( sims, .(nlab, cparam, tau, order, encoding), function(x) summary(x$BestFit) )

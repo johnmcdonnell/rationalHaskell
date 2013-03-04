@@ -20,7 +20,7 @@ plot_inference <- function(...) {
   stims <- subset(simresult, type=="INFER")
   ggplot(stims) + geom_point(aes(x=x, y=y, colour=label))
 }
-plot_inference("--alphaparam=2.333 --bias=-1")
+plot_inference("--alphaparam=2.333 --bias=1")
 
 
 
