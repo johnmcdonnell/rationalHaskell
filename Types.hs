@@ -1,36 +1,67 @@
-module Stats (PDFFromSample,
+
+module Types (Stim,
+              Stims,
+              Partition,
+              validatePartition,
+              clusterItems,
+              PDFFromSample,
               ClusterPrior,
               bernoulliPosterior,
               tPosterior,
-              dirichletProcess) where
+              dirichletProcess
+              ) where
 
+import Data.Maybe (Maybe, fromJust, isJust)
 import qualified Data.Vector as V
 import qualified Data.Map as Map
-import Data.List (group, sort)
+import Data.List (group, sort, nub)
 import qualified Statistics.Distribution as StatDist
 import Statistics.Distribution.StudentT as StatDist.T
 import Statistics.Sample
--- import Math.Statistics
 
 import Utils
 
--- helper funs
-tatval :: Double -- ^ df
-       -> Double -- ^ x
-       -> Double -- ^ PDF evaluated at x
-tatval = StatDist.density . studentT
+-- * Stim datatype and associated functions
+type Stim = V.Vector (Maybe Double)
 
-sq x = x*x
+-- * Stim datatype and associated functions
+type Stims = V.Vector Stim
 
--- * Generating PDFs from a sample of points
+-- * Partition datatype and associated functions
+type Partition = V.Vector (Maybe Int)
+
+-- | Partitions must have all members from [0..max]
+validatePartition :: Partition -> Bool
+validatePartition part 
+  | V.null justs = True
+  | otherwise    = minzero && correctn
+  where
+    correctn = length uniques == (max+1)
+    minzero = min==0
+    uniques = (nub . V.toList) justs
+    max = V.maximum justs
+    min = V.minimum justs
+    justs = V.map fromJust $ V.filter isJust part
+
+-- | Extract the items that have been assigned to the cluster.
+clusterItems :: Partition -> Stims -> [Stims]
+clusterItems assignments stims = takeWhile (not . V.null) clusters
+  where
+    clusters = map (\i-> V.map (stims V.!) $ V.elemIndices (Just i) assignments) [0..]
+
+-- * Type of function to derive PDFs from a sample of points
 
 type PDFFromSample = V.Vector Double -> (Maybe Double -> Double, Double)
 
 fillerDistribtution :: PDFFromSample
 fillerDistribtution sample = ((\x -> 0.5), 0.5)
 
-type ClusterPrior = [Int] -> [Double]
+tatval :: Double -- ^ df
+       -> Double -- ^ x
+       -> Double -- ^ PDF evaluated at x
+tatval = StatDist.density . studentT
 
+-- | t posterior, used for continuous-valued dimensions
 tPosterior :: (Double, Double, Double, Double) -> PDFFromSample
 tPosterior prior sample  = (pdfFun, mui)
   where
@@ -49,6 +80,7 @@ tPosterior prior sample  = (pdfFun, mui)
     n = fromIntegral $ V.length sample
     (mu0, sigma0, alpha0, lambda0) = prior
 
+-- | Bernoulli posterior, used for discrete-valued dimensions
 bernoulliPosterior :: [Double] -> PDFFromSample
 bernoulliPosterior alphas sample = (pdfFun, pdfFun (Just 1))
   where
@@ -60,6 +92,10 @@ bernoulliPosterior alphas sample = (pdfFun, pdfFun (Just 1))
     n = fromIntegral $ V.length sample
     alpha0 = sum alphas
 
+-- * Prior on partitions
+
+type ClusterPrior = [Int] -> [Double]
+
 -- Takes a list of assignments (assumed to be consecutive ints) and returns the
 -- likelihood for each cluster, including a new cluster.
 dirichletProcess :: Double -> ClusterPrior
@@ -70,4 +106,3 @@ dirichletProcess alpha assignments = pPartitions ++ [pNew]
     pPartitions = map (\x -> (fromIntegral x) / (n+alpha)) counts
     counts = map length $ (group . sort) assignments
     n = fromIntegral $ length assignments
-

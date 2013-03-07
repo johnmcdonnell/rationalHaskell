@@ -14,7 +14,8 @@ module Utils
     vectranspose,
     catMaybeV,
     inplacewrite,
-    Down (Down)
+    Down (Down),
+    sq
     ) where
 
 import qualified Data.List as List
@@ -101,3 +102,4 @@ newtype Down a = Down a deriving (Eq)
 instance Ord a => Ord (Down a) where
     compare (Down x) (Down y) = y `compare` x
 
+sq x = x*x

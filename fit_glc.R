@@ -89,8 +89,8 @@ compare.models <- function(loglik0, loglik1) {
     if( attr(loglik0, 'df') > attr(loglik1, 'df') )  stop( "First object must be the reduced model.")
     if( attr(loglik0, 'df') == attr(loglik1, 'df') )  return (loglik0 < loglik1)
     if (loglik0 > loglik1 ) {
-        warning( "Restricted model better fit than full model. Could be a numerical error." )
-        return( F )
+        warning(paste("Restricted model better fit than full model. Could be a numerical error.", loglik0, loglik1))
+        return(F)
     }
     anova.glc(loglik0, loglik1) < alpha
 }
@@ -118,10 +118,10 @@ fits.table <- function(df, withplot=F) {
     
     if (length(unique(df$resp)) < 2) {
         warning( paste("always gave the same response.") )
-        return data.frame(BestFit="Null", BestFitOne="Null", Used="Null",
+        return(data.frame(BestFit="Null", BestFitOne="Null", Used="Null",
                           unimodcoeff=0, bimodcoeff=0, twodAngle=-999,
                           twodBimod=0, twodNoise=0, twodBias=1, labcond=labcond,
-                          unlab=unlab, nlab=nlab, order=order)
+                          unlab=unlab, nlab=nlab, order=order))
     }
     model.formulas <- list(Unimodal = resp ~ unimod,
                            Bimodal = resp ~ bimod,
@@ -204,8 +204,8 @@ run_anderson_once <- function(alpha, nlab, order, encoding, bias) {
   arglist$nlab <- nlab
   arglist$alpha <- alpha
   arglist$bias <- bias
-  arglist[[order]] <- NA
-  arglist[[encoding]] <- NA
+  arglist[[as.character(order)]] <- NA
+  arglist[[as.character(encoding)]] <- NA
   
   output_columns <- c("type","bimod","unimod","label","clust")
   command <- paste("./testanderson", list.to.args(arglist))
@@ -215,7 +215,7 @@ run_anderson_once <- function(alpha, nlab, order, encoding, bias) {
 # }}}1
 
 # {{{1 Simulation code
-simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0, tau=.05, plotting=F, echo=F) {
+simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0, tau=.05, plotting=F, echo=F, ...) {
     resps <- run_anderson_once(alpha, nlab, order, encoding, bias)
     inferences <- subset(resps, type=="INFER")
     inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
@@ -239,6 +239,8 @@ simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="
 
     fits.table(inferences)
 }
+
+simulate_anderson(bias=.5)
 
 plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0) {
     resps <- run_anderson_once(alpha, nlab, order, encoding, bias)
@@ -292,76 +294,79 @@ test.clust.proportion <- function() {
 #plot_anderson(cparam=.7/.3, order="lablast" )
 #plot_anderson(cparam=.7/.3, order="labfirst" )
 
-run_sims <- function(runs, nreps) {
-   all_sims <- ddply(runs, names(runs), function(df) {
-             attach(df[1,]) # Yes yes I know attaching is a dirty dirty thing to do.
-             count <- 0
-             ret <- data.frame()
-             while ( count < nreps ) {
-               this_sim <- try(simulate_anderson(cparam, nlab, order, encoding, tau, plotting=F))
-               if (class(this_sim) == "try-error") next # Sometimes the call fails.
-               count <- count + 1
-               ret <- rbind( ret, this_sim )
-             }
-             ret
-             #count <- count + nreps
-             #setTxtProgressBar(pb, count)
-                       }, .parallel=T)
-   
-   write.csv(all_sims, file="sims.csv")
-   all_sims
+run_sims <- function(runs, nreps, ofile) {
+    test_param_set <- function(df) {
+        count <- 0
+        ret <- data.frame()
+        while ( count < nreps ) {
+            if (df$bias_sd==0) { df$bias <- 0 }
+            else { df$bias <- rnorm(1, mean=0, sd=df$bias_sd) }
+            #this_sim <- try(simulate_anderson(alpha=alpha, nlab=nlab, order=order, encoding=encoding, bias=bias_param, tau=tau, plotting=F))
+            this_sim <- try(do.call(simulate_anderson, df))
+            if (class(this_sim) == "try-error") next # Sometimes the call fails.
+            this_sim$actual_bias <- df$bias
+            count <- count + 1
+            ret <- rbind( ret, this_sim )
+        }
+        ret
+        #count <- count + nreps
+        #setTxtProgressBar(pb, count)
+    }
+    all_sims <- ddply(runs, names(runs), test_param_set, .parallel=T)
+    
+    write.csv(all_sims, file=ofile)
+    all_sims
 }
 
 
 # {{{2 Try one run
 plot_anderson(alpha=1, nlab=16)
-simulate_anderson(1, 0, bias=.3, plotting=T, echo=T)
+# It looks like negative bias is weaker than positive.
+simulate_anderson(alpha=1, nlab=-1, bias=-1.5, plotting=F, echo=T)
+simulate_anderson(alpha=1, nlab=0, order="interspersed", encoding="encodeactual", bias=0, tau=0.05, plotting=F)
 
-resps <- run_anderson_once(1, 16, "interspersed", "actual")
-
+resps <- run_anderson_once(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=.2)
 stims <- subset(resps, type=="STIM")
 clusts <- subset(resps, type=="CLUST")
-clusts
-head(stims)
-stims$clust
 clustcounts <- daply( stims, .(clust), nrow )
 clustcounts['1']
+resps
 # }}}2
 # }}}1
 
 # {{{1 Run sims across conditions.
-runs <- expand.grid(nlab=c(0,4,16,-1), 
-                    order=c("interspersed", "labeledfirst", "labeledlast"),
-                    alpha=c(.75, 1, 1.8, .7/.3),
+runs <- expand.grid(nlab=c(-1),# nlab=c(0,4,16,-1), 
+                    order=c("interspersed"),# "labeledfirst", "labeledlast"),
+                    alpha=c(1,.7/.3),#c(.75, 1, 1.8, .7/.3),
                     tau=c(.05), 
+                    bias_sd=c(2, 3),
                     encoding=c("encodeactual"))
-runs <- subset( runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
+runs <- subset(runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
 
-nreps <- 5000
+nreps <- 1000
 #sims <- read.csv("sims.csv")
 ofile <- "bias.csv"
 sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
 
-counts <- ddply( sims, .(nlab, cparam, tau, order, encoding), function(x) summary(x$BestFit) )
+counts <- ddply(sims, .(nlab, alpha, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
 counts$ratio <- counts$Bimodal/counts$"2D"
-counts$params <- do.call(paste, c(counts[c("cparam", "tau")], sep = ":"))
+counts$params <- do.call(paste, c(counts[c("alpha", "tau")], sep = ":"))
 
 counts$twod <- counts$"2D"
-#print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(cparam))) + facet_wrap(~order))
+#print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(alpha))) + facet_wrap(~order))
 
-counts.melted <- melt(counts,
-                      id=c("nlab", "cparam", "tau", "order", "encoding"),
-                      measure.vars=c("twod", "Bimodal", "Unimodal", "Null"),
+counts.melted <- melt(subset(counts, bias_sd==.5),
+                      id=c("nlab", "alpha", "tau", "order", "encoding"),
+                      measure.vars=c("2D", "Bimodal", "Unimodal", "Null"),
                       variable.name="bestfit",
                       value.name="count")
 
 counts.melted$groupingparam <- do.call(paste, c(counts.melted[c("bestfit", "encoding")], sep = ":"))
-counts.melted$cparam <- 1/(counts.melted$cparam+1) # Convert to Anderson notation
 
 print(ggplot(counts.melted) +
       geom_line(aes(x=factor(nlab), y=count, group=groupingparam, linetype=encoding, colour=bestfit)) + 
-      facet_grid(cparam~order, labeller=label_both) +
+      facet_grid(alpha~order, labeller=label_both) +
       labs(title=paste(nreps, "simulated runs of the Anderson rational model")))
 # }}}1
 

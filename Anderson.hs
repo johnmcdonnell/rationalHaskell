@@ -17,9 +17,9 @@ import System.Random
 import Statistics.Sample
 import System.Console.CmdArgs
 
-import Stats
-import Rational
 import Utils
+import Types
+import Rational
 
 -- Anderson sampling
 sampleNext :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition -> Stim -> Int
@@ -28,19 +28,6 @@ sampleNext (clusterPrior, distributions) stimuli assignments newstim = assignmen
     assignment = (V.maxIndex . V.fromList) posterior
     posterior = clusterPosterior clusterPrior distributions stimuli assignments newstim
 
-
--- andersonSample :: (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
---                -> Stims                     -- ^ Task stimuli
---                -> Partition
--- andersonSample prior stimuli = runST $ do
---     let n = V.length stimuli
---     assignmentStore <- VM.replicate n Nothing
---     V.forM_ (V.indexed stimuli) (\(i, newstim) -> do
---         assignments <- V.freeze assignmentStore
---         let chosenclust = sampleNext prior stimuli assignments newstim
---         VM.write assignmentStore i (Just chosenclust)
---         )
---     V.freeze assignmentStore
 
 encodeActual :: Stim -> [Double] -> Rand StdGen Stim
 encodeActual newstim guess = return $ newstim

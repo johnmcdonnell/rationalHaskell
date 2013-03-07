@@ -24,11 +24,11 @@ import System.Random.Shuffle
 import Statistics.Sample
 import System.Console.CmdArgs
 
+-- Internal libraries
 import Utils
 import Random
-
+import Types
 import Rational
-import Stats
 
 
 -- Encapsulates the task and its prior.
@@ -39,16 +39,16 @@ type Task = (Stims, [PDFFromSample])
 getPriors :: (Double, Double, Double) -> [[Maybe Double]] -> [PDFFromSample]
 getPriors (contalpha, contlambda, bias) stims  = tpriors ++ [binomprior]
   where
-    expbias = exp bias
+    expbias = (sqrt . exp) bias
     dims = LA.toColumns $ LA.fromLists $ map ((map fromJust) . init) stims
     tpriors = [tPosterior (mean dim, (stdDev dim) * multiplier, contalpha, contlambda) | (dim, multiplier) <- zip dims [expbias, 1/expbias]]
     binomprior =  bernoulliPosterior [1, 1]
 
 medinSchafferTask :: [Double] -> Task
-medinSchafferTask binomAlphas = (medinSchafferStims, andersondists)
+medinSchafferTask bernoulliAlphas = (medinSchafferStims, andersondists)
   where 
-    andersondists = replicate 5 binom_prior
-    binom_prior = bernoulliPosterior binomAlphas
+    andersondists = replicate 5 bernoulli_prior
+    bernoulli_prior = bernoulliPosterior bernoulliAlphas
     medinSchafferStims = V.fromList $ map (V.fromList . (map Just)) medinSchafferItems
     medinSchafferItems = [[1,1,1,1,1], 
                           [1,0,1,0,1], 

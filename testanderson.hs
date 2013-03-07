@@ -17,7 +17,7 @@ import Text.CSV
 
 import Utils
 
-import Stats
+import Types
 import Rational
 import Anderson
 import Tasks
@@ -33,12 +33,14 @@ runTest prior stimuli assignments = V.map getpred
 
 -- * Run simulation on the various tasks
 
--- |Predictions for the Andrson model are given explicitly in Anderson (1991),
+-- |Predictions for the Anderson model are given explicitly in Anderson (1991),
 -- so they make a good test that the model is working as expected in the discrete case.
+runMedinSchaffer :: IO ()
 runMedinSchaffer = do
     let (task, dists) = medinSchafferTask [1,1]
     let couplingParam = dirichletProcess 1.0
-    andersonSample EncodeActual (couplingParam, dists) task
+    (partition, guesses) <- evalRandIO $ andersonSample EncodeActual (couplingParam, dists) task
+    print partition
 
 runContinuous = do
     let mu1 = 1
@@ -152,11 +154,12 @@ modelArgs = ModelArgs {
            &= summary "Anderson Rational Model" 
            &= details ["Runs a simulation of the Anderson Rational Model."]
 
+main :: IO ()
 main = do
-    opts <- cmdArgs modelArgs
-    -- runMedinSchaffer
+    -- opts <- cmdArgs modelArgs
+    runMedinSchaffer
     -- runContinuous
     -- runZeithamova
-    runTVTask opts
+    -- runTVTask opts
     -- runVandistTask opts
 
