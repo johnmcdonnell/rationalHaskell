@@ -1,4 +1,5 @@
-module Random (normalM,
+module Random (lognormalM,
+               normalM,
                normalsM,
                binormals
                ) where
@@ -13,6 +14,9 @@ import Statistics.Distribution.Normal
 import qualified Numeric.LinearAlgebra as LA
 
 import Utils
+
+lognormalM :: RandomGen g => Double -> Double -> Rand g Double
+lognormalM mu sd = liftM exp (normalM mu sd)
 
 normalM :: RandomGen g => Double -> Double -> Rand g Double
 normalM mu sd = do

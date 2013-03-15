@@ -198,12 +198,15 @@ softmax_binomial <- function(pfalse, tau) {
   runif(1)>odds_false
 }
 
-run_anderson_once <- function(alpha, nlab, order, encoding, bias) {
+run_anderson_once <- function(alpha, nlab, order, encoding, bias=0, sigma0=0, a0=1, lambda0=1, bias_sd=NA) {
   # Get args
   arglist <- list()
   arglist$nlab <- nlab
   arglist$alpha <- alpha
   arglist$bias <- bias
+  arglist$sigma0 <- sigma0
+  arglist$a0 <- a0
+  arglist$lambda0 <- lambda0
   arglist[[as.character(order)]] <- NA
   arglist[[as.character(encoding)]] <- NA
   
@@ -216,7 +219,9 @@ run_anderson_once <- function(alpha, nlab, order, encoding, bias) {
 
 # {{{1 Simulation code
 simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0, tau=.05, plotting=F, echo=F, ...) {
-    resps <- run_anderson_once(alpha, nlab, order, encoding, bias)
+    #args <- list(...)
+    #print(args$sigma0)
+    resps <- run_anderson_once(alpha, nlab, order, encoding, ...)
     inferences <- subset(resps, type=="INFER")
     inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
     if (echo) { print( inferences) }
@@ -240,10 +245,8 @@ simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="
     fits.table(inferences)
 }
 
-simulate_anderson(bias=.5)
-
-plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=0) {
-    resps <- run_anderson_once(alpha, nlab, order, encoding, bias)
+plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", ...) {
+    resps <- run_anderson_once(...)
     all.stims <- subset(resps, type=="STIM")
     stims <- subset(all.stims, bimod>0 & unimod>0 ) # Remove invisible
     # BUG somtimes there is no cluster assigned number 0.
@@ -263,8 +266,8 @@ plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="enco
        scale_colour_gradient2()
 }
 
-cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", bias=0, firstnclusts=1) {
-   resps <- run_anderson_once(cparam, nlab, order, encoding, bias)
+cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", firstnclusts=1, ...) {
+   resps <- run_anderson_once(cparam, nlab, order, encoding, ...)
    all.stims <- subset(resps, type=="INFER")
    clustlengths <- rev(sort(daply( all.stims, .(clust), nrow )))
    nclusts <- length(unique(all.stims$clust))
@@ -301,7 +304,7 @@ run_sims <- function(runs, nreps, ofile) {
         while ( count < nreps ) {
             if (df$bias_sd==0) { df$bias <- 0 }
             else { df$bias <- rnorm(1, mean=0, sd=df$bias_sd) }
-            #this_sim <- try(simulate_anderson(alpha=alpha, nlab=nlab, order=order, encoding=encoding, bias=bias_param, tau=tau, plotting=F))
+            #df$bias <- df$bias_sd
             this_sim <- try(do.call(simulate_anderson, df))
             if (class(this_sim) == "try-error") next # Sometimes the call fails.
             this_sim$actual_bias <- df$bias
@@ -320,12 +323,17 @@ run_sims <- function(runs, nreps, ofile) {
 
 
 # {{{2 Try one run
-plot_anderson(alpha=1, nlab=16)
+plot_anderson(alpha=1, nlab=16, bias=2)
 # It looks like negative bias is weaker than positive.
-simulate_anderson(alpha=1, nlab=-1, bias=-1.5, plotting=F, echo=T)
+#b <- rnorm(1, mean=0, sd=4)
+simulate_anderson(alpha=2.333, nlab=-1, bias=7, sigma0=0.35, tau=0.05, plotting=T, echo=T)
+simulate_anderson(alpha=2.333, nlab=-1, bias=7, tau=0.05, plotting=T, echo=T)
 simulate_anderson(alpha=1, nlab=0, order="interspersed", encoding="encodeactual", bias=0, tau=0.05, plotting=F)
+simulate_anderson(alpha=2.333, nlab=16, bias=0, plotting=T)
+simulate_anderson(alpha=1, nlab=16, bias=0)
 
-resps <- run_anderson_once(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=.2)
+
+resps <- run_anderson_once(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", bias=2)
 stims <- subset(resps, type=="STIM")
 clusts <- subset(resps, type=="CLUST")
 clustcounts <- daply( stims, .(clust), nrow )
@@ -335,28 +343,39 @@ resps
 # }}}1
 
 # {{{1 Run sims across conditions.
-runs <- expand.grid(nlab=c(-1),# nlab=c(0,4,16,-1), 
-                    order=c("interspersed"),# "labeledfirst", "labeledlast"),
-                    alpha=c(1,.7/.3),#c(.75, 1, 1.8, .7/.3),
+runs <- expand.grid(nlab=c(0,4,16,-1), 
+                    order=c("interspersed", "labeledfirst", "labeledlast"),
+                    sigma0=c(.1, .2, .28, .35, .5),
+                    a0=c(.5, 1, 4, 10),
+                    lambda0=c(.5, 1, 4, 10),
+                    alpha=c(1, .6/.4, .7/.3, 4),
                     tau=c(.05), 
-                    bias_sd=c(2, 3),
+                    bias_sd=c(0, .5),
                     encoding=c("encodeactual"))
-runs <- subset(runs, ! ((encoding=="guess" | encoding=="softguess" ) & order!="interspersed"))
+runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
+nrow(runs)
 
-nreps <- 1000
-#sims <- read.csv("sims.csv")
-ofile <- "bias.csv"
+nreps <- 100
+#sims <- read.csv("bias.csv")
+ofile <- "hugegrid.csv"
 sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
 
-counts <- ddply(sims, .(nlab, alpha, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
+counts <- ddply(sims, .(nlab, alpha, sigma0, a0, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
+names(counts)
 counts$ratio <- counts$Bimodal/counts$"2D"
 counts$params <- do.call(paste, c(counts[c("alpha", "tau")], sep = ":"))
-
 counts$twod <- counts$"2D"
 #print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(alpha))) + facet_wrap(~order))
 
-counts.melted <- melt(subset(counts, bias_sd==.5),
+# Subsetting
+semisup <- subset(counts, nlab==16 & Null<20 & bias_sd==0 & order=="interspersed")
+arrange(semisup, twod)
+subset(counts, alpha==4 & sigma0==0.2 & lambda0==.5 & bias_sd==0 & a0==4)
+subset(counts, bias_sd==.5 & order=="interspersed" & alpha==1)
+subset(counts, bias_sd==0 & order=="interspersed" & alpha==.7/.3)
+
+counts.melted <- melt(subset(counts, bias_sd==.5 & tau==.10),
                       id=c("nlab", "alpha", "tau", "order", "encoding"),
                       measure.vars=c("2D", "Bimodal", "Unimodal", "Null"),
                       variable.name="bestfit",
@@ -368,6 +387,7 @@ print(ggplot(counts.melted) +
       geom_line(aes(x=factor(nlab), y=count, group=groupingparam, linetype=encoding, colour=bestfit)) + 
       facet_grid(alpha~order, labeller=label_both) +
       labs(title=paste(nreps, "simulated runs of the Anderson rational model")))
+
 # }}}1
 
 # {{{1 Plots for paper

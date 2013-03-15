@@ -58,7 +58,7 @@ runContinuous = do
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 runZeithamova = do
-    (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1, 0) 100
+    (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1, Nothing, 0) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
     (partition, guesses) <- evalRandIO $ andersonSample EncodeActual prior task
@@ -66,13 +66,13 @@ runZeithamova = do
 
 -- |These are the simulations for McDonnell et al. (2013)
 runTVTask :: ModelArgs -> IO ()
-runTVTask (ModelArgs alphaparam order encoding bias nlabarg proplab) = do
+runTVTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlabarg proplab) = do
     let maxlab = 16
         (nlab, nounlab) = if nlabarg < 0 then (maxlab, True) else (nlabarg, False)
     
     -- Set up priors
     let filterfun = if nounlab then V.filter (isJust . V.last) else id
-    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (1, 1, bias) (28*4) nlab
+    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (a0, lambda0, Just sigma0, bias) (28*4) nlab
     
     let prior  = (dirichletProcess alphaparam, distpriors)
     
@@ -109,9 +109,9 @@ runTVTask (ModelArgs alphaparam order encoding bias nlabarg proplab) = do
     putStrLn $ printCSV $ V.toList ret
 
 runVandistTask :: ModelArgs -> IO ()
-runVandistTask (ModelArgs alphaparam order encoding bias nlabarg proplab) = do
+runVandistTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlabarg proplab) = do
     -- TODO: Integrate this: (task, distpriors) <- evalRandIO $ vandistTask (1, 1, bias) 800 proplab
-    (task, distpriors) <- evalRandIO $ vandistTask (1, 1) 800 proplab
+    (task, distpriors) <- evalRandIO $ vandistTask (a0, lambda0) 800 proplab
     
     let prior  = (dirichletProcess alphaparam, distpriors)
     
@@ -133,6 +133,9 @@ data ModelArgs = ModelArgs {
            alphaparam :: Double,
            order :: SortOrder,
            encoding :: Encoding,
+           sigma0 :: Double,
+           a0 :: Double,
+           lambda0 :: Double,
            bias :: Double,
            nlab :: Int,
            proplab :: Double
@@ -146,7 +149,10 @@ modelArgs = ModelArgs {
            encoding = enum [EncodeActual, 
                             EncodeGuess, 
                             EncodeGuessSoft],
-           bias = 0               &= help "Bias. Valence determines direction",
+           sigma0 = 0.35          &= help "Prior over sd",
+           a0 = 1                 &= help "Strength of prior over mean",
+           lambda0 = 1            &= help "Strength of prior over variance",
+           bias = 1               &= help "Bias. Valence determines direction",
            nlab = 16              &= help "# of labeled items, <0 -> 16-all-labeled; applies only to TVTask",
            proplab = 0.5          &= help "Proporation of items labeled, applies only to Vandist task"
            } 
@@ -156,10 +162,10 @@ modelArgs = ModelArgs {
 
 main :: IO ()
 main = do
-    -- opts <- cmdArgs modelArgs
-    runMedinSchaffer
+    opts <- cmdArgs modelArgs
+    -- runMedinSchaffer
     -- runContinuous
     -- runZeithamova
-    -- runTVTask opts
+    runTVTask opts
     -- runVandistTask opts
 

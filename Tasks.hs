@@ -12,7 +12,7 @@ module Tasks (  Task
              ) where
 
 import Data.List (sortBy, transpose)
-import Data.Maybe (catMaybes, fromJust)
+import Data.Maybe (catMaybes, fromJust, fromMaybe)
 import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VI
@@ -34,14 +34,30 @@ import Rational
 -- Encapsulates the task and its prior.
 type Task = (Stims, [PDFFromSample])
 
+-- Generates priors given a task, the confidences, and a noise factor.
+getPriorsRandom :: RandomGen g => (Double, Double, Double) -> [[Maybe Double]] -> Rand g [PDFFromSample]
+getPriorsRandom (contalpha, contlambda, noise) stims  = do 
+    sds <- sequence $ replicate n (lognormalM (log  pooledsd) noise)
+    let tpriors = map (\(mu, sd) -> tPosterior (mu, sd, contalpha, contlambda)) (zip means sds)
+    return $ tpriors ++ [binomprior]
+  where
+    means = map mean $ LA.toColumns stimmat
+    pooledsd = stdDev $ LA.flatten stimmat
+    stimmat = LA.fromLists $ map ((map fromJust) . init) stims
+    binomprior =  bernoulliPosterior [1, 1]
+    n = (length $ head stims) - 1
+
 -- Generates priors given a task, the confidences, and a dimension bias.
 -- Only works in the case of two non-label dimensions, unfortunately
-getPriors :: (Double, Double, Double) -> [[Maybe Double]] -> [PDFFromSample]
-getPriors (contalpha, contlambda, bias) stims  = tpriors ++ [binomprior]
+-- var = sigma1 * sigma2 (this is fixed: pooledsd^2)
+-- bias = sigma1 / sigma2 log(bias)
+getPriorsBias :: (Double, Double, Maybe Double, Double) -> [[Maybe Double]] -> [PDFFromSample]
+getPriorsBias (a0, lambda0, sigma0, logbias) stims  = tpriors ++ [binomprior]
   where
-    expbias = (sqrt . exp) bias
-    dims = LA.toColumns $ LA.fromLists $ map ((map fromJust) . init) stims
-    tpriors = [tPosterior (mean dim, (stdDev dim) * multiplier, contalpha, contlambda) | (dim, multiplier) <- zip dims [expbias, 1/expbias]]
+    sqrtbias = sqrt $ exp logbias
+    tpriors = [tPosterior (mean dim, (fromMaybe pooledsd sigma0) * multiplier, a0, lambda0) | (dim, multiplier) <- zip (LA.toColumns stimmat) [sqrtbias, 1/sqrtbias]]
+    pooledsd = stdDev $ LA.flatten stimmat
+    stimmat = LA.fromLists $ map ((map fromJust) . init) stims
     binomprior =  bernoulliPosterior [1, 1]
 
 medinSchafferTask :: [Double] -> Task
@@ -91,10 +107,10 @@ zeithamovaMaddoxStims n = do
     let mabify = (\x -> if isNaN x then Nothing else Just x)
     return $ map (map mabify) shuffled
 
-zeithamovaMaddox :: (RandomGen g) => (Double, Double, Double) -> Int -> Rand g Task
+zeithamovaMaddox :: (RandomGen g) => (Double, Double, Maybe Double, Double) -> Int -> Rand g Task
 zeithamovaMaddox priorparams n = do
     stims <- zeithamovaMaddoxStims n
-    let priors = getPriors priorparams stims
+    priors <- return $ getPriorsBias priorparams stims
     let vectorizedstims = V.fromList $ (map V.fromList) $ stims
     return (vectorizedstims, priors)
 
@@ -126,10 +142,10 @@ mcdonnellTaskStims n nlab = do
     shuffledstims <- shuffleM stims
     return shuffledstims
 
-mcdonnellTask :: RandomGen g => (Double, Double, Double) -> Int -> Int -> Rand g Task
+mcdonnellTask :: RandomGen g => (Double, Double, Maybe Double, Double) -> Int -> Int -> Rand g Task
 mcdonnellTask priorparams n nlab = do
     stims <- mcdonnellTaskStims n nlab
-    let priors = getPriors priorparams stims
+    priors <- return $ getPriorsBias priorparams stims
     return (V.fromList $ (map V.fromList) $ stims, priors)
 
 labfirstcompare :: Maybe a -> Maybe a -> Ordering
@@ -144,7 +160,7 @@ lablastcompare _         _         = EQ
 
 data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show, Data, Typeable)
 
-mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double, Double) -> Int -> Int -> Rand g Task
+mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double, Maybe Double, Double) -> Int -> Int -> Rand g Task
 mcdonnellTaskOrdered Interspersed priors n nlab = mcdonnellTask priors n nlab
 mcdonnellTaskOrdered order priorparams n nlab = do
     (task, priors) <- mcdonnellTask priorparams n nlab
@@ -173,7 +189,7 @@ vandistTask (contalpha, contlambda) n proplab = do
         rho = 0.99
     xstims <- binormals meansX sigmas rho nperCat
     nstims <- binormals meansN sigmas rho nperCat
-    let withlabels = LA.fromBlocks [[debug $ LA.takeRows perCat xstims, scal2mat 0], 
+    let withlabels = LA.fromBlocks [[LA.takeRows perCat xstims, scal2mat 0], 
                                     [LA.dropRows perCat xstims, scal2mat $ 0/0],
                                     [LA.takeRows perCat nstims, scal2mat 1],
                                     [LA.dropRows perCat nstims, scal2mat $ 0/0]]
