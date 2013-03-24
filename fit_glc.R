@@ -323,7 +323,7 @@ run_sims <- function(runs, nreps, ofile) {
 
 
 # {{{2 Try one run
-plot_anderson(alpha=1, nlab=16, bias=2)
+#plot_anderson(alpha=1, nlab=16, bias=2)
 # It looks like negative bias is weaker than positive.
 #b <- rnorm(1, mean=0, sd=4)
 simulate_anderson(alpha=2.333, nlab=-1, bias=7, sigma0=0.35, tau=0.05, plotting=T, echo=T)
@@ -345,20 +345,20 @@ resps
 # {{{1 Run sims across conditions.
 runs <- expand.grid(nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.1, .2, .28, .35, .5),
-                    a0=c(.5, 1, 4, 10),
-                    lambda0=c(.5, 1, 4, 10),
-                    alpha=c(1, .6/.4, .7/.3, 4),
+                    sigma0=c(.15),
+                    a0=c(10),
+                    lambda0=c(1),
+                    alpha=c(1, .7/.3),
                     tau=c(.05), 
-                    bias_sd=c(0, .5),
+                    bias_sd=c(0, 1, 2, 5),
                     encoding=c("encodeactual"))
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 100
-#sims <- read.csv("bias.csv")
-ofile <- "hugegrid.csv"
-sims <- run_sims(runs, nreps, ofile)
+nreps <- 500
+ofile <- "bias.csv"
+sims <- read.csv(ofile)
+#sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
 
 counts <- ddply(sims, .(nlab, alpha, sigma0, a0, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
@@ -369,11 +369,17 @@ counts$twod <- counts$"2D"
 #print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(alpha))) + facet_wrap(~order))
 
 # Subsetting
+counts
 semisup <- subset(counts, nlab==16 & Null<20 & bias_sd==0 & order=="interspersed")
 arrange(semisup, twod)
-subset(counts, alpha==4 & sigma0==0.2 & lambda0==.5 & bias_sd==0 & a0==4)
-subset(counts, bias_sd==.5 & order=="interspersed" & alpha==1)
-subset(counts, bias_sd==0 & order=="interspersed" & alpha==.7/.3)
+arrange(subset(semisup, alpha==.7/.3), twod)
+subset(counts, alpha==.7/.3 & lambda0==1  & sigma0==.15 & bias_sd==1)
+subset(counts, alpha==4 & sigma0==0.2 & a0==10 & lambda0==1 & bias_sd==0) # first == last
+subset(counts, alpha==4 & sigma0==0.2 & a0==4 & lambda0==.5 & bias_sd==0) # first == last
+subset(counts, alpha==4 & sigma0==0.1 & a0==1 & lambda0==.5 & bias_sd==0)  # CLOSE TO A WINNER
+subset(counts, alpha==4 & sigma0==0.1 & a0==4 & lambda0==1 & bias_sd==0) # Weak trend here
+subset(counts, alpha==4 & sigma0==0.1 & a0==10 & lambda0==.5 & bias_sd==0) # Close, but 4 ~= 16 ??
+subset(counts, alpha==.7/.3 & sigma0==0.1 & a0==10 & lambda0==.5 & bias_sd==0) # 4 ~=16
 
 counts.melted <- melt(subset(counts, bias_sd==.5 & tau==.10),
                       id=c("nlab", "alpha", "tau", "order", "encoding"),
