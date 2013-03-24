@@ -55,8 +55,9 @@ getPriorsBias :: (Double, Double, Maybe Double, Double) -> [[Maybe Double]] -> [
 getPriorsBias (a0, lambda0, sigma0, logbias) stims  = tpriors ++ [binomprior]
   where
     sqrtbias = sqrt $ exp logbias
-    tpriors = [tPosterior (mean dim, (fromMaybe pooledsd sigma0) * multiplier, a0, lambda0) | (dim, multiplier) <- zip (LA.toColumns stimmat) [sqrtbias, 1/sqrtbias]]
-    pooledsd = stdDev $ LA.flatten stimmat
+    tpriors = [tPosterior (mean dim, sigma, a0, lambda0) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
+    sigmas = [pooledsd*sqrtbias, pooledsd/sqrtbias]
+    pooledsd = fromMaybe ((stdDev . LA.flatten) stimmat) sigma0
     stimmat = LA.fromLists $ map ((map fromJust) . init) stims
     binomprior =  bernoulliPosterior [1, 1]
 
