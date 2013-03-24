@@ -46,7 +46,7 @@ Required Packages
 - [hmatrix](http://hackage.haskell.org/package/hmatrix)
 - [vector](http://hackage.haskell.org/package/vector)
 - [vector-algorithms](http://hackage.haskell.org/package/vector-algorithms)
-- [statistics](http://hackage.haskell.org/package/statistics)
+- [statistics](http://hackage.haskell.org/package/statistics) (requires > 0.10.2, which may require [installing from Github](https://github.com/bos/statistics))
 - [random-shuffle](http://hackage.haskell.org/package/random-shuffle)
 - [csv](http://hackage.haskell.org/package/csv)
 - [cmdargs](http://hackage.haskell.org/package/cmdargs)

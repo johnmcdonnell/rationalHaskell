@@ -60,7 +60,7 @@ fillerDistribtution sample = ((\x -> 0.5), 0.5)
 tPosterior :: (Double, Double, Double, Double) -> PDFFromSample
 tPosterior (mu0, sigma0, alpha0, lambda0) sample  = (pdfFun, mui)
   where
-    pdfFun (Just query) = StatDist.density (studentTGeneral alphai mui tsigma) query
+    pdfFun (Just query) = StatDist.density (studentTUnstandardized alphai mui tsigma) query
     pdfFun Nothing = 1
     tsigma = sigmai * (sqrt (1 + (1/lambdai)))
     sigmai = sqrt $ (alpha0*(sq sigma0) + 
