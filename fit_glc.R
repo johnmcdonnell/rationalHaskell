@@ -29,7 +29,7 @@ runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4
 nrow(runs)
 
 nreps <- 100
-ofile <- "bias.csv"
+ofile <- "params.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
@@ -60,8 +60,8 @@ subset(counts, bias_sd==0 & order=="interspersed" & alpha==.7/.3)
 
 # {{{1 Plots
 # {{{2 Setup
-counts.melted <- melt(counts,
-                      id=c("nlab", "alpha", "tau", "order", "encoding", "bias_sd"),
+counts.melted <- melt(subset(counts, tau==.05 & sigma0==.125 & a0==15),
+                      id=c("nlab", "alpha", "tau", "order", "encoding", "bias_sd", "sigma0", "a0"),
                       measure.vars=c("2D", "Bimodal", "Unimodal", "Null"),
                       variable.name="bestfit",
                       value.name="count")
@@ -75,19 +75,55 @@ lowalpha <- 1
 
 # {{{2 Experiment 1
 plotdata <- subset(counts.melted, alpha==highalpha & order=="interspersed")
-
-ggplot(plotdata) + geom_line(aes(x=factor(nlab), y=count, group=bestfit))  + facet_wrap(bestfit~bias_sd)
+ggplot(plotdata) + geom_line(aes(x=factor(nlab), y=count, group=bias_sd, linetype=factor(bias_sd)))  + facet_grid(~bestfit)
+ggsave("exp1.pdf")
 # }}}2
 
 # {{{2 Experiment 2
-plotdata <- subset(counts.melted, nlab==16 & order=="interspersed")
+identify.exp2.cond <- function(row) {
+    if (row["order"]!="interspersed") return(NA)
+    nlab <- as.numeric(row["nlab"]) 
+    if (is.infinite(nlab)) nlab <- "All"
+    alpha <- as.numeric(row["alpha"]) 
+    if (alpha==1) {
+        return(paste(nlab, "-lab-resp", sep=""))
+    } else if (nlab==16) {
+        return(paste(nlab, "-lab-noresp", sep=""))
+    } else return(NA)
+}
 
-ggplot(plotdata) + geom_line(aes(x=factor(alpha), y=count, group=bestfit))  + facet_wrap(bestfit~bias_sd)
+plot.data <- subset(counts.melted, order=="interspersed")
+plot.data$cond <- factor(apply(plot.data, 1, identify.exp2.cond))
+plot.data$cond <- factor(plot.data$cond, levels=levels(plot.data$cond)[c(1,3,2,4)])
+plot.data <- subset(plot.data, ! is.na(cond) )
+
+ggplot(plot.data) + geom_line(aes(x=cond, y=count, group=bias_sd, linetype=factor(bias_sd)))  + facet_grid(~bestfit)
+ggsave("exp2.pdf")
 # }}}2
 
 # {{{2 Experiment 3
-plotdata <- subset(counts.melted, nlab==16 & alpha==highalpha)
+identify.exp3.cond <- function(row) {
+    nlab <- as.numeric(row["nlab"]) 
+    order <- row["order"]
+    if (nlab==0 & order=="interspersed") return("US")
+    if (order=="interspersed") return(NA)
+    alpha <- as.numeric(row["alpha"]) 
+    if (alpha==1) return(NA)
+    if (is.infinite(nlab) & order=="labeledlast") return("FS-lablast")
+    if (nlab == 16) {
+      if (order=="labeledfirst") return("SS-labfirst")
+      if (order=="labeledlast") return("SS-lablast")
+    }
+    return(NA)
+}
+plot.data <- subset(counts.melted, alpha==highalpha)
+plot.data$cond <- factor(apply(plot.data, 1, identify.exp3.cond))
+plot.data$cond <- factor(plot.data$cond, levels=levels(plot.data$cond)[c(4,3,2,1)])
+plot.data <- subset(plot.data, ! is.na(cond))
 
-ggplot(plotdata) + geom_line(aes(x=factor(order), y=count, group=bestfit))  + facet_wrap(bestfit~bias_sd)
+plot.data
+
+ggplot(plot.data) + geom_line(aes(x=cond, y=count, group=bias_sd, linetype=factor(bias_sd)))  + facet_grid(~bestfit)
+ggsave("exp3.pdf")
 # }}}2
 # }}}1
