@@ -111,7 +111,7 @@ runTVTask params@TVTask{..} = do
 runVandistTask :: ModelArgs -> IO ()
 runVandistTask params@Vandist{..} = do
     let priorparams = (a0, lambda0, if sigma0==0 then Nothing else Just sigma0, bias)
-    (task, distpriors) <- evalRandIO $ vandistTask priorparams 800 proplab
+    (task, distpriors) <- evalRandIO $ vandistTask priorparams numitems proplab
     
     let prior  = (dirichletProcess alphaparam, distpriors)
     
@@ -146,6 +146,7 @@ data ModelArgs = TVTask {
                    a0 :: Double,
                    lambda0 :: Double,
                    bias :: Double,
+                   numitems :: Int,
                    proplab :: Double
                  }
                  deriving (Data, Show, Typeable)
@@ -175,6 +176,7 @@ vandistMode = Vandist {
            a0 = 1                 &= help "Strength of prior over mean",
            lambda0 = 1            &= help "Strength of prior over variance",
            bias = 0               &= help "Bias. Valence determines direction",
+           numitems = 800         &= help "Total # of items",
            proplab = 0.5          &= help "Proporation of items labeled"
            } 
            &= help "Run with Vandist (2009) task"

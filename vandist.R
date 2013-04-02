@@ -98,20 +98,39 @@ plot_clusters(alpha=1, a0=10)
 # }}}1
 
 # {{{1 Run simulations
-
+# {{{2 Vandist Exp. 1
 runs <- expand.grid(proplab=c(.05, .25, .5, 1),
                     lambda0=c(1),
-                    a0=c(10),
+                    a0=c(15),
                     bias_sd=c(0,1),
-                    tau=c(.05),
+                    tau=c(0, .05, .15),
                     sigma0=c(.125),
                     alpha=c(1, .7/.3))
 
-nreps <- 10
-sims <- run_vandist_sims(runs, nreps)
+nreps <- 50
+vandist.exp1.sims <- run_vandist_sims(runs, nreps)
 
-accuracies <- ddply(sims, c(names(runs), 'block'), summarise, acc=mean(hit))
-ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_grid(alpha~bias_sd)
+vandist.exp1.acc <- ddply(sims, c(names(runs), 'block'), summarise, acc=mean(hit))
+ggplot(subset(accuracies, sigma0==.125 & tau==.05)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_grid(alpha~bias_sd)
+ggsave("vandistsims_exp1.pdf")
+# }}}2
+# {{{2 Vandist Exp. 2
+runs.exp2 <- expand.grid(proplab=c(.25),
+                    lambda0=c(1),
+                    a0=c(15),
+                    bias_sd=c(0,1),
+                    tau=c(0, .05),
+                    sigma0=c(.125),
+                    alpha=c(1, .7/.3),
+                    n=c(800,1600))
+nreps <- 1
+vandist.exp2.sims <- run_vandist_sims(runs.exp2, nreps)
+
+vandist.exp2.acc <- ddply(subset(vandist.exp2.sims, tau>0), c(names(runs.exp2), 'block'), summarise, acc=mean(hit))
+
+ggplot(subset(vandist.exp2.acc, sigma0==.125)) + geom_line(aes(x=factor(block), y=acc, group=n, colour=factor(n))) + facet_grid(alpha~bias_sd)
+ggsave("vandistsims_exp2.pdf")
+# }}}2
 # }}}1
 #
 # vi: foldmethod=marker

@@ -1,6 +1,6 @@
 
 anderson: 
-	ghc -O1 runanderson.hs
+	ghc -O2 runanderson.hs
 
 docs:
 	haddock -o docs --html runanderson.hs
