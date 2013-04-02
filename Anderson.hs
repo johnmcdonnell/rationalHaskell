@@ -10,8 +10,10 @@ import Data.Vector (freeze, thaw, MVector, Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import Control.Monad
-import Control.Monad.Random
 import Control.Applicative
+import Control.Monad.Random
+import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.ST
 import System.Random
 import Statistics.Sample
@@ -28,7 +30,7 @@ sampleNext (clusterPrior, distributions) stimuli assignments newstim = assignmen
     assignment = (V.maxIndex . V.fromList) posterior
     posterior = clusterPosterior clusterPrior distributions stimuli assignments newstim
 
-
+-- * Types and functions for changing the encoding, not currently implemented (always encodeActual)
 encodeActual :: Stim -> [Double] -> Rand StdGen Stim
 encodeActual newstim guess = return $ newstim
 
@@ -48,23 +50,25 @@ encodeGuessSoft newstim inference = encode <$> (getRandom :: Rand StdGen Double)
 
 data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving (Show, Data, Typeable)
 
-andersonIterate :: (ClusterPrior, [PDFFromSample]) -> Encoding -> (Partition, Stims, [Double]) -> (Int, Stim) -> Rand StdGen (Partition, Stims, [Double])
-andersonIterate prior encoding (assignments, stims, guesses) (i, newstim) = do
+-- | Accept a particular stimulus and its index, update model and return a guess of what its label will be
+andersonIterate :: Encoding -> (Int, Stim) -> Model Double
+andersonIterate encoding  (i, newstim) = do
+    (prior, stims) <- ask
+    assignments <- get
+    -- The ccode is here for this but it's not implemented!
     let encodefun = case encoding of EncodeGuess -> encodeGuess
                                      EncodeGuessSoft -> encodeGuessSoft 
                                      EncodeActual -> encodeActual
     
     let incomplete = V.any isNothing newstim
     
-    -- Hackish but assume the last is the label
+    -- Assume the last is the label
     let guessstim = V.snoc (V.init newstim) Nothing
         guess = fst $ infer prior stims assignments guessstim
-    encodestim <- encodefun newstim (if incomplete then guess else [])
     
-    let chosenclust = sampleNext prior stims assignments encodestim
-    let retStims = V.snoc stims encodestim -- TODO would be better in place.
-    let retAssign = V.modify (\vec -> VM.unsafeWrite vec i (Just chosenclust)) assignments
-    return (retAssign, retStims, guesses ++ [head guess])
+    let chosenclust = sampleNext prior stims assignments newstim
+    put $ V.modify (\vec -> VM.unsafeWrite vec i (Just chosenclust)) assignments
+    return $ head guess
 
 -- Not yet implemented
 summarizeCluster :: Stims -> Partition -> Int -> String
@@ -83,15 +87,11 @@ summarizeClusters stims partition = concat $ intersperse "\n" $ map summfun [0..
 andersonSample ::   Encoding                  -- ^ How to encode items (Use guess or not)
                  -> (ClusterPrior, [PDFFromSample])  -- ^ (Coupling param, estimators for each dimension)
                  -> Stims                     -- ^ Task stimuli
-                 -> Rand StdGen (Partition, [Double]) -- ^ Partition and list of guesses
-andersonSample encoding prior stimuli = do
-    (finalAssign, finalStims, guesses) <- V.ifoldl' (\prev i newstim ->
-                  prev >>= (flip (andersonIterate prior encoding) (i, newstim)))
-                  (return (assignmentStore, stimStore, [])) 
-                  stimuli
-    return (finalAssign, guesses)
+                 -> Rand StdGen (V.Vector Double, Partition) -- ^ Partition and list of guesses
+andersonSample encoding prior stimuli = runStateT (runReaderT (runM model) (prior, stimuli)) assignmentStore
   where
+    model = liftM V.fromList $ forM enumStimuli (andersonIterate encoding)
+    enumStimuli = zip [0..] (V.toList stimuli)
     assignmentStore = V.replicate n Nothing
-    stimStore = V.empty
     n = V.length stimuli
 
