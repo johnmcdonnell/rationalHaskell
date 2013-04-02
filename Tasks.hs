@@ -191,10 +191,17 @@ vandistTask priorparams n proplab = do
         rho = 0.99
     xstims <- (/100) <$> binormals meansX sigmas rho nperCat
     nstims <- (/100) <$> binormals meansN sigmas rho nperCat
-    let withlabels = LA.fromBlocks [[LA.takeRows perCat xstims, scal2mat 0], 
-                                    [LA.dropRows perCat xstims, scal2mat $ 0/0],
-                                    [LA.takeRows perCat nstims, scal2mat 1],
-                                    [LA.dropRows perCat nstims, scal2mat $ 0/0]]
+    let labelsadded = LA.fromBlocks [[LA.takeRows perCat xstims, scal2mat 0], 
+                                     [LA.dropRows perCat xstims, scal2mat $ 0/0],
+                                     [LA.takeRows perCat nstims, scal2mat 1],
+                                     [LA.dropRows perCat nstims, scal2mat $ 0/0]]
+    let labelsnotadded = LA.fromBlocks [[xstims, scal2mat $ 0/0],
+                                        [nstims, scal2mat $ 0/0]]
+    let labelsalladded = LA.fromBlocks [[xstims, scal2mat $ 0],
+                                        [nstims, scal2mat $ 1]]
+    let withlabels = case proplab of 0 -> labelsnotadded
+                                     1 -> labelsalladded
+                                     otherwise -> labelsadded
     shuffled <- shuffleM $ LA.toLists withlabels
     let mabify = (\x -> if isNaN x then Nothing else Just x)
         stims = map (map (mabify)) shuffled  -- /10 moves it into a 0-1 scale
