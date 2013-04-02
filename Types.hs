@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Types (Stim,
               Stims,
@@ -8,13 +9,19 @@ module Types (Stim,
               ClusterPrior,
               bernoulliPosterior,
               tPosterior,
-              dirichletProcess
+              dirichletProcess,
+              Params,
+              Model (..)
               ) where
 
 import Data.Maybe (Maybe, fromJust, isJust)
 import qualified Data.Vector as V
 import qualified Data.Map as Map
 import Data.List (group, sort, nub)
+import Control.Monad.Random
+import Control.Monad.Reader
+import Control.Monad.State
+
 import qualified Statistics.Distribution as StatDist
 import Statistics.Distribution.StudentT as StatDist.T
 import Statistics.Sample
@@ -100,4 +107,10 @@ dirichletProcess alpha assignments = pPartitions ++ [pNew]
     counts = map length $ (group . sort) assignments
     n = fromIntegral $ length assignments
 
+type Params = (ClusterPrior, [PDFFromSample])
+
+-- ^ Monad for model tracking state
+newtype Model a = Model {
+      runM :: ReaderT (Params, Stims) (StateT Partition (Rand StdGen)) a
+          } deriving (Monad, MonadReader (Params, Stims), MonadState Partition)
 

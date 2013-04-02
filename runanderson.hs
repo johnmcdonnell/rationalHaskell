@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, RecordWildCards #-}
 
 -- import qualified Control.Monad.State as State
 import Data.List (sortBy)
@@ -54,19 +54,19 @@ runContinuous = do
     (task, distpriors) <- evalRandIO $ twodtask [(mu1, sigma1), (mu2, sigma2)] n
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    (partition, guesses) <- evalRandIO $ andersonSample EncodeActual prior task
+    (guesses, partition) <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 runZeithamova = do
     (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1, Nothing, 0) 100
     
     let prior  = (dirichletProcess 1.0, distpriors)
-    (partition, guesses) <- evalRandIO $ andersonSample EncodeActual prior task
+    (guesses, partition) <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 -- |These are the simulations for McDonnell et al. (2013)
 runTVTask :: ModelArgs -> IO ()
-runTVTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlabarg proplab) = do
+runTVTask params@TVTask{..} = do
     let maxlab = 16
         (nlab, nounlab) = if nlabarg < 0 then (maxlab, True) else (nlabarg, False)
     
@@ -77,7 +77,7 @@ runTVTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlabarg pr
     let prior  = (dirichletProcess alphaparam, distpriors)
     
     -- Now run the model
-    (partition, guesses) <- evalRandIO $ andersonSample encoding prior task
+    (guesses, partition) <- evalRandIO $ andersonSample encoding prior task
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
@@ -109,19 +109,20 @@ runTVTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlabarg pr
     putStrLn $ printCSV $ V.toList ret
 
 runVandistTask :: ModelArgs -> IO ()
-runVandistTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlabarg proplab) = do
-    -- TODO: Integrate this: (task, distpriors) <- evalRandIO $ vandistTask (1, 1, bias) 800 proplab
-    (task, distpriors) <- evalRandIO $ vandistTask (a0, lambda0) 800 proplab
+runVandistTask params@Vandist{..} = do
+    let priorparams = (a0, lambda0, if sigma0==0 then Nothing else Just sigma0, bias)
+    (task, distpriors) <- evalRandIO $ vandistTask priorparams 800 proplab
     
     let prior  = (dirichletProcess alphaparam, distpriors)
     
     -- Now run the model
-    (partition, guesses) <- evalRandIO $ andersonSample encoding prior task
+    (guesses, partition) <- evalRandIO $ andersonSample encoding prior task
     
     -- Dump all those mabies
     let demabify = V.map (fromMaybe (-9))
         demabified = V.map demabify task
-        results = map (\(x,Just y) -> V.toList $ V.snoc x (fromIntegral y)) $ (filter (isJust . snd)) $ zip (V.toList demabified) (V.toList partition)
+        withguesses = V.zipWith V.snoc demabified guesses
+        results = map (\(x,Just y) -> V.toList $ V.snoc x (fromIntegral y)) $ (filter (isJust . snd)) $ zip (V.toList withguesses) (V.toList partition)
         resultstrings = map (map show) results
     
     -- Print it out
@@ -129,19 +130,27 @@ runVandistTask (ModelArgs alphaparam order encoding sigma0 a0 lambda0 bias nlaba
     
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
 
-data ModelArgs = ModelArgs {
-           alphaparam :: Double,
-           order :: SortOrder,
-           encoding :: Encoding,
-           sigma0 :: Double,
-           a0 :: Double,
-           lambda0 :: Double,
-           bias :: Double,
-           nlab :: Int,
-           proplab :: Double
-           } deriving (Data, Show, Typeable)
+data ModelArgs = TVTask {
+                   alphaparam :: Double,
+                   order :: SortOrder,
+                   encoding :: Encoding,
+                   sigma0 :: Double,
+                   a0 :: Double,
+                   lambda0 :: Double,
+                   bias :: Double,
+                   nlabarg :: Int
+                 } | Vandist {
+                   alphaparam :: Double,
+                   encoding :: Encoding,
+                   sigma0 :: Double,
+                   a0 :: Double,
+                   lambda0 :: Double,
+                   bias :: Double,
+                   proplab :: Double
+                 }
+                 deriving (Data, Show, Typeable)
 
-modelArgs = ModelArgs {
+tvMode = TVTask {
            alphaparam = 1         &= help "Dirichlet parameter (alpha)",
            order = enum [Interspersed, 
                          LabeledFirst, 
@@ -149,23 +158,41 @@ modelArgs = ModelArgs {
            encoding = enum [EncodeActual, 
                             EncodeGuess, 
                             EncodeGuessSoft],
-           sigma0 = 0.35          &= help "Prior over sd",
+           sigma0 = 0             &= help "Prior over sd",  -- Could use .35 as well
            a0 = 1                 &= help "Strength of prior over mean",
            lambda0 = 1            &= help "Strength of prior over variance",
-           bias = 1               &= help "Bias. Valence determines direction",
-           nlab = 16              &= help "# of labeled items, <0 -> 16-all-labeled; applies only to TVTask",
-           proplab = 0.5          &= help "Proporation of items labeled, applies only to Vandist task"
+           bias = 0               &= help "Bias. Valence determines direction",
+           nlabarg = 16           &= help "# of labeled items, if negative uses 16-all-labeled"
            } 
-           &= program "testanderson" 
+           &= help "Run the McDonnell (2013) TV task"
+
+vandistMode = Vandist {
+           alphaparam = 1         &= help "Dirichlet parameter (alpha)",
+           encoding = enum [EncodeActual, 
+                            EncodeGuess, 
+                            EncodeGuessSoft],
+           sigma0 = 0             &= help "Prior over sd",
+           a0 = 1                 &= help "Strength of prior over mean",
+           lambda0 = 1            &= help "Strength of prior over variance",
+           bias = 0               &= help "Bias. Valence determines direction",
+           proplab = 0.5          &= help "Proporation of items labeled"
+           } 
+           &= help "Run with Vandist (2009) task"
+
+modelArgs = cmdArgsMode 
+           $ modes [tvMode, vandistMode]
+           &= program "./runanderson" 
            &= summary "Anderson Rational Model" 
-           &= details ["Runs a simulation of the Anderson Rational Model."]
+           -- &= details ["Runs a simulation of the Anderson Rational Model in the given task."]
 
 main :: IO ()
 main = do
-    opts <- cmdArgs modelArgs
+    opts <- cmdArgsRun modelArgs
+    case opts of TVTask{..} -> runTVTask opts
+                 otherwise ->  runVandistTask opts
     -- runMedinSchaffer
     -- runContinuous
     -- runZeithamova
-    runTVTask opts
+    -- runTVTask opts
     -- runVandistTask opts
 

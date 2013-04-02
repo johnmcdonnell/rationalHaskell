@@ -3,7 +3,8 @@ source("simfunctions.R")
 
 # {{{1 Try single runs
 
-simulate_anderson(alpha=2.333, nlab=-1, bias=100, a0=10, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, echo=F)
+
+simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=100, a0=10, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, echo=F)
 plot_anderson(alpha=1, lambda0=1, a0=10, nlab=16, bias=2)
 # It looks like negative bias is weaker than positive.
 #b <- rnorm(1, mean=0, sd=4)

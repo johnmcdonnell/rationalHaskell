@@ -1,11 +1,11 @@
 
 anderson: 
-	ghc -O1 testanderson.hs
+	ghc -O1 runanderson.hs
 
 docs:
-	haddock -o docs --html testanderson.hs
+	haddock -o docs --html runanderson.hs
 
 clean:
 	rm *.o
 	rm *.hi
-	rm testanderson
+	rm runanderson

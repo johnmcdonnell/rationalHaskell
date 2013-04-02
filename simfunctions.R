@@ -82,7 +82,7 @@ resps <- c(T,F)
 labels <- c( "Unimodal", "Bimodal", "2D", "Null" ) 
 oned.labels <- c( "Unimodal", "Bimodal", "Null" ) 
 alpha <- .01
-binary <- "./testanderson"
+binary <- "./runanderson"
 
 compare.models <- function(loglik0, loglik1) {
     # Returns true if the full model is better than the reduced model.
@@ -198,30 +198,25 @@ softmax_binomial <- function(pfalse, tau) {
   runif(1)>odds_false
 }
 
-run_anderson_once <- function(alpha, nlab, order, encoding, bias=0, sigma0=0, a0=1, lambda0=1, bias_sd=NA) {
+run_anderson_once <- function(task="tvask", ...) {
   # Get args
-  arglist <- list()
-  arglist$nlab <- nlab
-  arglist$alpha <- alpha
-  arglist$bias <- bias
-  arglist$sigma0 <- sigma0
-  arglist$a0 <- a0
-  arglist$lambda0 <- lambda0
-  arglist[[as.character(order)]] <- NA
-  arglist[[as.character(encoding)]] <- NA
+  arglist <- list(...)
+  if ("order" %in% arglist) arglist[[as.character(order)]] <- NA
+  if ("encoding" %in% arglist) arglist[[as.character(encoding)]] <- NA
   
-  output_columns <- c("type","bimod","unimod","label","clust")
-  command <- paste("./testanderson", list.to.args(arglist))
+  output_columns <- c("type","bimod","unimod","label","guess","clust")
+  command <- paste(binary, task, list.to.args(arglist))
   print(command)
   read.csv(pipe(command), col.names=output_columns, header=F)
 }
 # }}}1
 
+
 # {{{1 Simulation code
-simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", tau=.05, plotting=F, echo=F, ...) {
-    #args <- list(...)
+simulate_anderson <- function(tau=.05, plotting=F, echo=F, ...) {
+    args <- list(...)
     #print(args$sigma0)
-    resps <- run_anderson_once(alpha, nlab, order, encoding, ...)
+    resps <- run_anderson_once(...)
     inferences <- subset(resps, type=="INFER")
     inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
     if (echo) { print( inferences) }
@@ -238,15 +233,16 @@ simulate_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="
     }
     # Prepping for use in fits.table
     inferences$alllab <- "false"
-    inferences$order <- order
-    inferences$nlab <- nlab
-    inferences$encoding <- encoding
+    inferences$order <- args$order
+    inferences$nlab <- args$nlab
+    inferences$encoding <- args$encoding
 
     fits.table(inferences)
 }
 
-plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="encodeactual", ...) {
-    resps <- run_anderson_once(alpha, nlab, order, encoding, ...)
+
+plot_anderson <- function(...) {
+    resps <- run_anderson_once(...)
     all.stims <- subset(resps, type=="STIM")
     stims <- subset(all.stims, bimod>0 & unimod>0 ) # Remove invisible
     # BUG somtimes there is no cluster assigned number 0.
@@ -266,8 +262,8 @@ plot_anderson <- function(alpha=1, nlab=16, order="interspersed", encoding="enco
        scale_colour_gradient2()
 }
 
-cluster_proportion <- function(cparam=1, nlab=16, order="interspersed", encoding="actual", firstnclusts=1, ...) {
-   resps <- run_anderson_once(cparam, nlab, order, encoding, ...)
+cluster_proportion <- function(firstnclusts=1, ...) {
+   resps <- run_anderson_once(...)
    all.stims <- subset(resps, type=="INFER")
    clustlengths <- rev(sort(daply( all.stims, .(clust), nrow )))
    nclusts <- length(unique(all.stims$clust))

@@ -55,9 +55,9 @@ getPriorsBias :: (Double, Double, Maybe Double, Double) -> [[Maybe Double]] -> [
 getPriorsBias (a0, lambda0, sigma0, logbias) stims  = tpriors ++ [binomprior]
   where
     sqrtbias = sqrt $ exp logbias
-    tpriors = [tPosterior (mean dim, sigma, a0, lambda0) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
+    tpriors = [tPosterior $ (mean dim, sigma, a0, lambda0) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
     sigmas = [pooledsd*sqrtbias, pooledsd/sqrtbias]
-    pooledsd = fromMaybe ((stdDev . LA.flatten) stimmat) sigma0
+    pooledsd = fromMaybe (((/3) . stdDev . LA.flatten) stimmat) sigma0
     stimmat = LA.fromLists $ map ((map fromJust) . init) stims
     binomprior =  bernoulliPosterior [1, 1]
 
@@ -172,11 +172,12 @@ mcdonnellTaskOrdered order priorparams n nlab = do
     comparison = case order of LabeledFirst -> labfirstcompare
                                LabeledLast -> lablastcompare
 
+-- ^ Grid of evenly-spaced items in a grid, used as the test phase in the TV task
 gridTest :: Stims
 gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
 
-vandistTask :: RandomGen g => (Double, Double) -> Int -> Double -> Rand g Task
-vandistTask (contalpha, contlambda) n proplab = do
+vandistTask :: RandomGen g => (Double, Double, Maybe Double, Double) -> Int -> Double -> Rand g Task
+vandistTask priorparams n proplab = do
     let nlab = floor $ proplab * (fromIntegral n)
     let (nperCat, nrem) = quotRem n 2
     let (perCat, nlabrem) = quotRem nlab 2
@@ -188,18 +189,19 @@ vandistTask (contalpha, contlambda) n proplab = do
         meansN = LA.fromList [60, 40]
         sigmas = (11.88, 11.88)
         rho = 0.99
-    xstims <- binormals meansX sigmas rho nperCat
-    nstims <- binormals meansN sigmas rho nperCat
+    xstims <- (/100) <$> binormals meansX sigmas rho nperCat
+    nstims <- (/100) <$> binormals meansN sigmas rho nperCat
     let withlabels = LA.fromBlocks [[LA.takeRows perCat xstims, scal2mat 0], 
                                     [LA.dropRows perCat xstims, scal2mat $ 0/0],
                                     [LA.takeRows perCat nstims, scal2mat 1],
                                     [LA.dropRows perCat nstims, scal2mat $ 0/0]]
     shuffled <- shuffleM $ LA.toLists withlabels
     let mabify = (\x -> if isNaN x then Nothing else Just x)
-        stims = V.fromList $ map (V.fromList . (map mabify)) shuffled
-    let dims = init $ LA.toColumns withlabels
-        tpriors = [tPosterior (mean dim, stdDev dim, contalpha, contlambda) | dim <- dims]
-        binomprior =  bernoulliPosterior [1, 1]
-    return (stims, tpriors ++ [binomprior])
+        stims = map (map (mabify)) shuffled  -- /10 moves it into a 0-1 scale
+    priors <- return $ getPriorsBias priorparams stims
+    -- let dims = init $ LA.toColumns withlabels
+    --     tpriors = [tPosterior (mean dim, stdDev dim, contalpha, contlambda) | dim <- dims]
+    --     binomprior =  bernoulliPosterior [1, 1]
+    return (V.fromList $ (map V.fromList) $ stims, priors)
 
 
