@@ -18,18 +18,18 @@ simulate_anderson(alpha=1, nlab=16, bias=0)
 # {{{1 Run sims across conditions.
 runs <- expand.grid(nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.15),
-                    a0=c(10),
+                    sigma0=c(.125, .15, .185),
+                    a0=c(5, 8, 10, 15),
                     lambda0=c(1),
                     alpha=c(1, .7/.3),
-                    tau=c(.05), 
-                    bias_sd=c(0, 1, 2, 5),
+                    tau=c(0, .05), 
+                    bias_sd=c(0, 1),
                     encoding=c("encodeactual"))
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 500
-ofile <- "bias.csv"
+nreps <- 1000
+ofile <- "params.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
@@ -42,15 +42,16 @@ counts$twod <- counts$"2D"
 # }}}1
 
 # {{{1 taking a look
-semisup <- subset(counts, nlab %in% c(0,16) & bias_sd==0 & order=="interspersed")
-countsquantified <- ddply(semisup, .(alpha, sigma0, a0, lambda0, tau, order, bias_sd, encoding), function(df) {
+interspersed <- subset(counts, order=="interspersed")
+countsquantified <- ddply(interspersed, .(alpha, sigma0, a0, lambda0, tau, order, bias_sd, encoding), function(df) {
       unlab <- subset(df, nlab==0)
       lab <- subset(df, nlab==16)
       denom <- function(x) x$twod + x$Unimodal + x$Bimodal #+ x$Null
       unlabpercent <- unlab$Bimodal / denom(unlab)
       labpercent <- lab$Bimodal / denom(lab)
       data.frame(lab=labpercent, unlab=unlabpercent)})
-ggplot(countsquantified) + geom_point(aes(x=lab, y=unlab, colour=factor(sigma0))) + geom_abline() + facet_grid(lambda0~a0)
+head(countsquantified)
+ggplot(countsquantified) + geom_point(aes(x=nlab, y=unlab, colour=factor(sigma0))) + geom_abline() + facet_grid(lambda0~a0)
 
 # }}}1
 

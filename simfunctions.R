@@ -192,10 +192,14 @@ fits.table <- function(df, withplot=F) {
 # }}}2
 #
 # Softmax, chooses true or false given a fixed probably of false
+# Wikipedia article: https://en.wikipedia.org/wiki/Softmax_activation_function
 softmax_binomial <- function(pfalse, tau) {
-  exponentiated <- exp(c(pfalse, 1-pfalse) / tau)
-  odds_false <- exponentiated[1] / sum(exponentiated)
-  runif(1)>odds_false
+  if (tau==0) return(pfalse < .5)
+  else {
+    exponentiated <- exp(c(pfalse, 1-pfalse) / tau)
+    odds_false <- exponentiated[1] / sum(exponentiated)
+    return(runif(1)>odds_false)
+  }
 }
 
 run_anderson_once <- function(alpha, nlab, order, encoding, bias=0, sigma0=0, a0=1, lambda0=1, bias_sd=NA) {
