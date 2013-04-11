@@ -27,9 +27,9 @@ list.to.args <- function(arglist) {
   for (arg in names(arglist)) {
     val <- arglist[[arg]]
     if (is.na(val)) {
-      args[[arg]] <- paste0("--", arg)
+      args[[arg]] <- paste("--", arg, sep="")
     } else {
-      args[[arg]] <- paste0("--", arg, "=", val)
+      args[[arg]] <- paste("--", arg, "=", val, sep="")
     }
   }
   do.call(paste, args)
