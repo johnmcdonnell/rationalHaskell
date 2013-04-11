@@ -102,9 +102,9 @@ plot_clusters(alpha=1, a0=10)
 # Here we want to check for the effect of labeled items.
 runs <- expand.grid(proplab=c(.5, 1),
                     lambda0=c(1),
-                    a0=c(10),
+                    a0=c(15),
                     bias_sd=c(0,1),
-                    tau=c(.05),
+                    tau=c(0, .05, .15),
                     sigma0=c(.125),
                     alpha=c(1, .7/.3),
                     numtrials=c(800))

@@ -112,7 +112,6 @@ runVandistTask :: ModelArgs -> IO ()
 runVandistTask params@Vandist{..} = do
     let priorparams = (a0, lambda0, if sigma0==0 then Nothing else Just sigma0, bias)
     (task, distpriors) <- evalRandIO $ vandistTask priorparams numtrials proplab
-    
     let prior  = (dirichletProcess alphaparam, distpriors)
     
     -- Now run the model
