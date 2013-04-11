@@ -60,7 +60,7 @@ run_vandist_sims <- function(runs, nreps) {
     }
     ret
   }
-  ret <- ddply(runs, names(runs), do.run, .parallel=F)
+  ret <- ddply(runs, names(runs), do.run, .parallel=T)
   ret$block <- floor((ret$trialnum-1)/80)+1
   ret
 }
@@ -101,21 +101,23 @@ plot_clusters(alpha=1, a0=10)
 
 # Here we want to check for the effect of labeled items.
 runs <- expand.grid(proplab=c(.5, 1),
-                    lambda0=c(1),
-                    a0=c(15),
-                    bias_sd=c(0,1),
+                    lambda0=c(.5, 1),
+                    a0=c(1, 5, 10, 15),
+                    bias_sd=c(0,1,2),
                     tau=c(0, .05, .15),
-                    sigma0=c(.125),
+                    sigma0=c(.05, .125, .25, .5),
                     alpha=c(1, .7/.3),
                     numtrials=c(800))
 
 runs[runs$proplab==1,]$numtrials <- 400
-nreps <- 10
-sims <- run_vandist_sims(runs, nreps)
-sims.reindexed <- sims
-sims.reindexed[sims.reindexed$proplab==1,]$block <- floor((sims.reindexed[sims.reindexed$proplab==1,]$trialnum-1) / 40)+1
+nreps <- 100
+library(data.table)
+sims <- as.data.table(run_vandist_sims(runs, nreps))
+sims[proplab==1, block:=floor((trialnum-1)/40)+1]
 
-accuracies <- ddply(sims.reindexed, c(names(runs), 'block'), summarise, acc=mean(hit))
+accuracies <- sims[,list(acc=mean(hit)), by=c(names(runs), 'block')
+#accuracies <- ddply(sims.reindexed, c(names(runs), 'block'), summarise, acc=mean(hit))
+write.csv(accuracies, file="vandistsims.csv")
 ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_grid(alpha~bias_sd)
 ggsave("figs/vandistsims.pdf")
 # }}}1
