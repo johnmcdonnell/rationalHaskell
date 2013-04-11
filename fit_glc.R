@@ -3,16 +3,7 @@ source("simfunctions.R")
 
 # {{{1 Try single runs
 
-
 simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, order="interspersed", echo=F)
-plot_anderson(alpha=1, lambda0=1, a0=10, nlab=16, bias=2)
-# It looks like negative bias is weaker than positive.
-#b <- rnorm(1, mean=0, sd=4)
-simulate_anderson(alpha=2.333, nlab=-1, bias=7, sigma0=0.35, tau=0.05, plotting=T, echo=T)
-simulate_anderson(alpha=2.333, nlab=-1, bias=7, tau=0.05, plotting=T, echo=T)
-simulate_anderson(alpha=1, nlab=0, order="interspersed", encoding="encodeactual", bias=0, tau=0.05, plotting=F)
-simulate_anderson(alpha=2.333, nlab=16, bias=0, plotting=T)
-simulate_anderson(alpha=1, nlab=16, bias=0)
 
 # }}}1
 
@@ -30,7 +21,7 @@ runs <- expand.grid(task="tvtask",
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 1000
+nreps <- 10000
 ofile <- "search_sd.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
