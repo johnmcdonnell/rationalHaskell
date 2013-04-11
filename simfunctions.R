@@ -17,9 +17,12 @@ almost_zero <- function(x) abs(x) < .00000001
 almost_equal <- function(x, y) almostzero(x-y)
 
 list.to.args <- function(arglist) {
-  # Syntax:
-  # list.to.args(list(x=2, thisarg="hithere", arg=NA))
-  # results in "--x=2 --thisarg=hithere --arg"
+  # Converts list to command line arguments.
+  # For a standalone argument, set it equal to NA.
+  # Example:
+  # list.to.args(list(x=2, herp="derp", arg=NA))
+  # results in 
+  # "--x=2 --herp=derp --arg"
   args <- list()
   for (arg in names(arglist)) {
     val <- arglist[[arg]]
@@ -202,11 +205,12 @@ softmax_binomial <- function(pfalse, tau) {
   }
 }
 
-run_anderson_once <- function(task="tvask", ...) {
-  # Get args
+run_anderson_once <- function(task="tvask", order=NA, encoding=NA, ...) {
+  # Get args, there are funny exceptions.
   arglist <- list(...)
-  if ("order" %in% arglist) arglist[[as.character(order)]] <- NA
-  if ("encoding" %in% arglist) arglist[[as.character(encoding)]] <- NA
+  if (! is.na(order)) arglist[[as.character(order)]] <- NA
+  if (! is.na(encoding)) arglist[[as.character(encoding)]] <- NA
+  arglist$bias_sd <- NULL
   
   output_columns <- c("type","bimod","unimod","label","guess","clust")
   command <- paste(binary, task, list.to.args(arglist))
@@ -315,3 +319,5 @@ run_sims <- function(runs, nreps, ofile) {
 }
 
 # }}}1
+#
+# vi: foldmethod=marker

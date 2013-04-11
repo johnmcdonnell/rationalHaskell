@@ -10,10 +10,9 @@ run_vandist_once <- function(...) {
 }
 
 # By default, sigma is .5 (pooled sd / 3)
-x <- run_anderson_once(task="vandist", a0=10, proplab=.5)
-x
-
-names(run_anderson_once())
+#x <- run_anderson_once(task="vandist", a0=10, proplab=.5)
+#x
+#names(x)
 
 plot_clusters <- function(...) {
   simresult <- run_anderson_once(task="vandist", ...)
@@ -61,7 +60,7 @@ run_vandist_sims <- function(runs, nreps) {
     }
     ret
   }
-  ret <- ddply(runs, names(runs), do.run, .parallel=T)
+  ret <- ddply(runs, names(runs), do.run, .parallel=F)
   ret$block <- floor((ret$trialnum-1)/80)+1
   ret
 }
@@ -76,18 +75,19 @@ vandist_et_al_sim <- function(bias_sd=0, n=1, tau=.05, ...) {
     ret$trialnum <- 1:nrow(ret)
     ret
   }
-  runs <- c(replicate(n,.05), replicate(n, .25), replicate(n, .5), replicate(n, 1))
+  runs <- c(replicate(n, .5), replicate(n, 1))
   stims <- adply(runs, 1, do.run, .parallel=F)
   stims$block <- floor((stims$trialnum-1)/80)+1
   stims$hit <- softmax_binomial(stims$guess, tau)==stims$label
   ddply(stims, .(proplab,block), summarise, acc=mean(hit))
   
 }
-accuracies <- vandist_et_al_sim(n=10, a0=15, alpha=2.333, sigma0=.125, bias_sd=1)
-ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=factor(proplab), colour=factor(proplab)))
 # }}}1
 
 # {{{1 Test above functions
+accuracies <- vandist_et_al_sim(n=100, a0=15, alpha=2.333, sigma0=.125, bias_sd=1)
+ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=factor(proplab), colour=factor(proplab)))
+
 plot_label(alpha=2.3333, proplab=.5, a0=10, bias=2)
 plot_clusters(alpha=2.3333, proplab=.5, a0=10)
 plot_guesses(alpha=2.3333, proplab=.5, a0=10, bias=rnorm(1))
@@ -99,19 +99,26 @@ plot_clusters(alpha=1, a0=10)
 
 # {{{1 Run simulations
 
-runs <- expand.grid(proplab=c(.05, .25, .5, 1),
+# Here we want to check for the effect of labeled items.
+runs <- expand.grid(proplab=c(.5, 1),
                     lambda0=c(1),
                     a0=c(10),
                     bias_sd=c(0,1),
                     tau=c(.05),
                     sigma0=c(.125),
-                    alpha=c(1, .7/.3))
+                    alpha=c(1, .7/.3),
+                    numtrials=c(800))
 
+runs[runs$proplab==1,]$numtrials <- 400
 nreps <- 10
 sims <- run_vandist_sims(runs, nreps)
+sims.reindexed <- sims
+sims.reindexed[sims.reindexed$proplab==1,]$block <- floor((sims.reindexed[sims.reindexed$proplab==1,]$trialnum-1) / 40)+1
 
-accuracies <- ddply(sims, c(names(runs), 'block'), summarise, acc=mean(hit))
+accuracies <- ddply(sims.reindexed, c(names(runs), 'block'), summarise, acc=mean(hit))
 ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_grid(alpha~bias_sd)
+ggsave("figs/vandistsims.pdf")
 # }}}1
 #
 # vi: foldmethod=marker
+#

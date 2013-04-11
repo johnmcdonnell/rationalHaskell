@@ -4,7 +4,7 @@ source("simfunctions.R")
 # {{{1 Try single runs
 
 
-simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=100, a0=10, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, echo=F)
+simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, order="interspersed", echo=F)
 plot_anderson(alpha=1, lambda0=1, a0=10, nlab=16, bias=2)
 # It looks like negative bias is weaker than positive.
 #b <- rnorm(1, mean=0, sd=4)
@@ -17,20 +17,21 @@ simulate_anderson(alpha=1, nlab=16, bias=0)
 # }}}1
 
 # {{{1 Run sims across conditions.
-runs <- expand.grid(nlab=c(0,4,16,-1), 
+runs <- expand.grid(task="tvtask",
+                    nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.125, .15, .185),
-                    a0=c(5, 8, 10, 15),
+                    sigma0=c(.125),
+                    a0=c(15),
                     lambda0=c(1),
                     alpha=c(1, .7/.3),
-                    tau=c(0, .05), 
-                    bias_sd=c(0, 1),
+                    tau=c(.05), 
+                    bias_sd=c(0, 1, 1.25, 1.5, 1.75, 2),
                     encoding=c("encodeactual"))
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 100
-ofile <- "params.csv"
+nreps <- 1000
+ofile <- "search_sd.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
