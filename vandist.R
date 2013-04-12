@@ -1,5 +1,6 @@
 
 #library(ggplot2)
+library(data.table)
 source("simfunctions.R")
 
 # {{{1 Functions
@@ -110,12 +111,18 @@ runs <- expand.grid(proplab=c(.5, 1),
                     numtrials=c(800))
 
 runs[runs$proplab==1,]$numtrials <- 400
-nreps <- 100
-library(data.table)
+nreps <- 25
 sims <- as.data.table(run_vandist_sims(runs, nreps))
 sims[proplab==1, block:=floor((trialnum-1)/40)+1]
 
-accuracies <- sims[,list(acc=mean(hit)), by=c(names(runs), 'block')
+# Some of our conditions are fractional so they can't be grouped by:
+for (col in names(runs)) {
+  col.expression <- parse(text=paste(col,":= as.character(", col, ")"))[[1]]
+  sims[, eval(col.expression)]
+}
+
+sims[,list(acc=mean(hit)), by=c(names(runs), 'block')]
+accuracies <- sims[,list(acc=mean(hit)), by=c(names(runs), 'block')]
 #accuracies <- ddply(sims.reindexed, c(names(runs), 'block'), summarise, acc=mean(hit))
 write.csv(accuracies, file="vandistsims.csv")
 ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_grid(alpha~bias_sd)
@@ -123,4 +130,3 @@ ggsave("figs/vandistsims.pdf")
 # }}}1
 #
 # vi: foldmethod=marker
-#
