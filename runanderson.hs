@@ -90,7 +90,12 @@ runTVTask params@TVTask{..} = do
     
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
     
+    -- CASE WITH NO LABELS.
     -- If there were no labels, we have to assume they are associated with the largest clusters.
+    -- This may be confusing, but it means that if there's only one cluster it will be labled 0,
+    -- if there are two or more, the biggest will be 0 and the second biggest will be 1. 
+    -- Labeling occurs by changing the label of one of the stims
+    -- "Largest" is defined as the most test items will be placed in that cluster.
     let initialinferences = runTest prior task partition gridTest
         inferpartition = map snd $ V.toList initialinferences
         partitions = Map.toList $ countUnique inferpartition
