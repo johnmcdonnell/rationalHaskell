@@ -57,12 +57,12 @@ runContinuous = do
     (guesses, partition) <- evalRandIO $ andersonSample EncodeActual prior task
     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
-runZeithamova = do
-    (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1, Nothing, 0) 100
-    
-    let prior  = (dirichletProcess 1.0, distpriors)
-    (guesses, partition) <- evalRandIO $ andersonSample EncodeActual prior task
-    V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
+-- runZeithamova = do
+--     (task, distpriors) <- evalRandIO $ zeithamovaMaddox (1, 1, Nothing, 0) 100
+--     
+--     let prior  = (dirichletProcess 1.0, distpriors)
+--     (guesses, partition) <- evalRandIO $ andersonSample EncodeActual prior task
+--     V.forM_ (V.zip task (V.map (fromMaybe (-1)) partition)) print
 
 -- |These are the simulations for McDonnell et al. (2013)
 runTVTask :: ModelArgs -> IO ()
@@ -72,7 +72,7 @@ runTVTask params@TVTask{..} = do
     
     -- Set up priors
     let filterfun = if nounlab then V.filter (isJust . V.last) else id
-    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order (a0, lambda0, Just sigma0, bias) (28*4) nlab
+    (task, distpriors) <- evalRandIO $ first filterfun <$> mcdonnellTaskOrdered order params (28*4) nlab
     
     let prior  = (dirichletProcess alphaparam, distpriors)
     
@@ -111,7 +111,7 @@ runTVTask params@TVTask{..} = do
 runVandistTask :: ModelArgs -> IO ()
 runVandistTask params@Vandist{..} = do
     let priorparams = (a0, lambda0, if sigma0==0 then Nothing else Just sigma0, bias)
-    (task, distpriors) <- evalRandIO $ vandistTask priorparams numtrials proplab
+    (task, distpriors) <- evalRandIO $ vandistTask params numtrials proplab
     let prior  = (dirichletProcess alphaparam, distpriors)
     
     -- Now run the model
@@ -129,26 +129,6 @@ runVandistTask params@Vandist{..} = do
     
     putStrLn $ printCSV $ map (("CLUST":) . (map show)) $ summarizeClusters distpriors task partition
 
-data ModelArgs = TVTask {
-                   alphaparam :: Double,
-                   order :: SortOrder,
-                   encoding :: Encoding,
-                   sigma0 :: Double,
-                   a0 :: Double,
-                   lambda0 :: Double,
-                   bias :: Double,
-                   nlabarg :: Int
-                 } | Vandist {
-                   alphaparam :: Double,
-                   encoding :: Encoding,
-                   sigma0 :: Double,
-                   a0 :: Double,
-                   lambda0 :: Double,
-                   bias :: Double,
-                   numtrials :: Int,
-                   proplab :: Double
-                 }
-                 deriving (Data, Show, Typeable)
 
 tvMode = TVTask {
            alphaparam = 1         &= help "Dirichlet parameter (alpha)",
@@ -160,6 +140,7 @@ tvMode = TVTask {
                             EncodeGuessSoft],
            sigma0 = 0             &= help "Prior over sd",  -- Could use .35 as well
            a0 = 1                 &= help "Strength of prior over mean",
+           alab = 1               &= help "Strength of prior over label",
            lambda0 = 1            &= help "Strength of prior over variance",
            bias = 0               &= help "Bias. Valence determines direction",
            nlabarg = 16           &= help "# of labeled items, if negative uses 16-all-labeled"
@@ -173,12 +154,14 @@ vandistMode = Vandist {
                             EncodeGuessSoft],
            sigma0 = 0             &= help "Prior over sd",
            a0 = 1                 &= help "Strength of prior over mean",
+           alab = 1               &= help "Strength of prior over label",
            lambda0 = 1            &= help "Strength of prior over variance",
            bias = 0               &= help "Bias. Valence determines direction",
            numtrials = 800        &= help "Number of trials.",
            proplab = 0.5          &= help "Proporation of items labeled"
            } 
            &= help "Run with Vandist (2009) task"
+
 
 modelArgs = cmdArgsMode 
            $ modes [tvMode, vandistMode]
