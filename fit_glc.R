@@ -3,7 +3,7 @@ source("simfunctions.R")
 
 # {{{1 Try single runs
 
-simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, order="interspersed", echo=F)
+simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, alab=1, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, order="interspersed", echo=F)
 
 # }}}1
 
@@ -11,23 +11,24 @@ simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, lambda0=1,
 runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.125),
-                    a0=c(15),
-                    lambda0=c(1),
+                    sigma0=c(.0625, .125, .25),
+                    a0=c(.5, 1, 5, 10, 15, 20),
+                    alab=c(.1,.5, 1, 5),
+                    lambda0=c(.5, 1, 5, 10, 15, 20),
                     alpha=c(1, .7/.3),
-                    tau=c(.05), 
-                    bias_sd=c(0, 1, 1.25, 1.5, 1.75, 2),
+                    tau=c(0, .05, .15), 
+                    bias_sd=c(0, 1, 1.5, 2),
                     encoding=c("encodeactual"))
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 10000
-ofile <- "search_sd.csv"
+nreps <- 100
+ofile <- "full_grid.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
 
-counts <- ddply(sims, .(nlab, alpha, sigma0, a0, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
+counts <- ddply(sims, .(nlab, alpha, sigma0, a0, alab, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
 #counts$ratio <- counts$Bimodal/counts$"2D"
 #counts$params <- do.call(paste, c(counts[c("alpha", "tau")], sep = ":"))
 counts$twod <- counts$"2D"

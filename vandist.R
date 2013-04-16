@@ -103,16 +103,17 @@ plot_clusters(alpha=1, a0=10)
 # {{{2 Run sims
 # Here we want to check for the effect of labeled items.
 runs <- expand.grid(proplab=c(.5, 1),
-                    lambda0=c(.5, 1),
-                    a0=c(1, 5, 10, 15),
-                    bias_sd=c(0,1,2),
-                    tau=c(0, .05, .15),
-                    sigma0=c(.05, .125, .25, .5),
+                    lambda0=c(.5, 1, 5, 10),
+                    a0=c(1, 8, 15, 20),
+                    bias_sd=c(0,1,1.5, 2,3),
+                    tau=c(0, .05, .15, .25),
+                    sigma0=c(.05, .125, .25),
                     alpha=c(1, .7/.3),
                     numtrials=c(800))
-
 runs[runs$proplab==1,]$numtrials <- 400
-nreps <- 100
+
+nreps <- 25
+
 sims <- as.data.table(run_vandist_sims(runs, nreps))
 sims[proplab==1, block:=floor((trialnum-1)/40)+1]
 
