@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Anderson (andersonSample,
-                Encoding (EncodeActual, EncodeGuess, EncodeGuessSoft)) where
+                ) where
 
 import Data.Function
 import Data.List
@@ -48,7 +48,6 @@ encodeGuessSoft newstim inference = encode <$> (getRandom :: Rand StdGen Double)
     prob = case inference of [x] -> x
                              otherwise -> 0.5
 
-data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving (Show, Data, Typeable)
 
 -- | Accept a particular stimulus and its index, update model and return a guess of what its label will be
 andersonIterate :: Encoding -> (Int, Stim) -> Model Double
