@@ -11,19 +11,20 @@ simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, alab=1, la
 runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.0625, .125, .25),
-                    a0=c(.5, 1, 5, 10, 15, 20),
-                    alab=c(.1,.5, 1, 5),
-                    lambda0=c(.5, 1, 5, 10, 15, 20),
+                    sigma0=c(.25),
+                    a0=c(1),
+                    alab=c(1),
+                    lambda0=c(1),
                     alpha=c(1, .7/.3),
-                    tau=c(0, .05, .15), 
-                    bias_sd=c(0, 1, 1.5, 2),
+                    tau=c(.05), 
+                    bias_sd=c(0),
                     encoding=c("encodeactual"))
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
 nreps <- 100
-ofile <- "full_grid.csv"
+ofile <- "search_sd.csv"
+ofile <- "andersonparams.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
