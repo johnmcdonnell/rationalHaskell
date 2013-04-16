@@ -59,7 +59,7 @@ getPriorsBias params stims  = tpriors ++ [binomprior]
     sigmas = [pooledsd*sqrtbias, pooledsd/sqrtbias]
     pooledsd = if (sigma0 params)==0 then (((/3) . stdDev . LA.flatten) stimmat) else (sigma0 params)
     stimmat = LA.fromLists $ map ((map fromJust) . init) stims
-    binomprior =  bernoulliPosterior [alab params / 2, alab params / 2]
+    binomprior =  bernoulliPosterior [alab params, alab params]
 
 medinSchafferTask :: [Double] -> Task
 medinSchafferTask bernoulliAlphas = (medinSchafferStims, andersondists)
@@ -171,7 +171,7 @@ mcdonnellTaskOrdered order args n nlab = do
     comparison = case order of LabeledFirst -> labfirstcompare
                                LabeledLast -> lablastcompare
 
--- ^ Grid of evenly-spaced items in a grid, used as the test phase in the TV task
+-- | Grid of evenly-spaced items in a grid, used as the test phase in the TV task
 gridTest :: Stims
 gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
 

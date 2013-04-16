@@ -15,7 +15,8 @@ module Types (SortOrder (..),
               tPosterior,
               dirichletProcess,
               Params,
-              Model (..)
+              Model (..),
+              runModel
               ) where
 
 import Data.Data
@@ -41,7 +42,8 @@ data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show, Data,
 data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving (Show, Data, Typeable)
 
 -- | Command line arguments.
-data ModelArgs = TVTask {
+data ModelArgs = MedinSchaffer |
+                 TVTask {
                    alphaparam :: Double,
                    order :: SortOrder,
                    encoding :: Encoding,
@@ -147,8 +149,11 @@ dirichletProcess alpha assignments = pPartitions ++ [pNew]
 
 type Params = (ClusterPrior, [PDFFromSample])
 
--- ^ Monad for model tracking state
-newtype Model a = Model {
-      runM :: ReaderT (Params, Stims) (StateT Partition (Rand StdGen)) a
-          } deriving (Monad, MonadReader (Params, Stims), MonadState Partition)
+-- * Monad for tracking model state
 
+newtype Model r s a = Model {
+      runM :: ReaderT r (StateT s (Rand StdGen)) a
+          } deriving (Monad, MonadReader r, MonadState s)
+
+runModel :: Model r s a -> r -> s -> Rand StdGen (a, s)
+runModel model read state = flip runStateT state $ flip runReaderT read $ runM model

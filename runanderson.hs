@@ -39,7 +39,7 @@ runMedinSchaffer :: IO ()
 runMedinSchaffer = do
     let (task, dists) = medinSchafferTask [1,1]
     let couplingParam = dirichletProcess 1.0
-    (partition, guesses) <- evalRandIO $ andersonSample EncodeActual (couplingParam, dists) task
+    (guesses, partition) <- evalRandIO $ andersonSample EncodeActual (couplingParam, dists) task
     print partition
 
 runContinuous = do
@@ -162,9 +162,10 @@ vandistMode = Vandist {
            } 
            &= help "Run with Vandist (2009) task"
 
+medinSchafferMode = MedinSchaffer &= help "Run on classic Medin & Schaffer (1978) task (reproducing Figure 1 in Anderson 1990)"
 
 modelArgs = cmdArgsMode 
-           $ modes [tvMode, vandistMode]
+           $ modes [medinSchafferMode, tvMode, vandistMode]
            &= program "./runanderson" 
            &= summary "Anderson Rational Model" 
            -- &= details ["Runs a simulation of the Anderson Rational Model in the given task."]
@@ -172,7 +173,8 @@ modelArgs = cmdArgsMode
 main :: IO ()
 main = do
     opts <- cmdArgsRun modelArgs
-    case opts of TVTask{..} -> runTVTask opts
+    case opts of MedinSchaffer -> runMedinSchaffer
+                 TVTask{..} -> runTVTask opts
                  otherwise ->  runVandistTask opts
     -- runMedinSchaffer
     -- runContinuous
