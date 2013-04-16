@@ -55,7 +55,7 @@ getPriorsBias :: ModelArgs -> [[Maybe Double]] -> [PDFFromSample]
 getPriorsBias params stims  = tpriors ++ [binomprior]
   where
     sqrtbias = sqrt $ exp $ bias params
-    tpriors = [tPosterior $ debug $ (mean dim, sigma, a0 params, lambda0 params) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
+    tpriors = [tPosterior $ (mean dim, sigma, a0 params, lambda0 params) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
     sigmas = [pooledsd*sqrtbias, pooledsd/sqrtbias]
     pooledsd = if (sigma0 params)==0 then (((/3) . stdDev . LA.flatten) stimmat) else (sigma0 params)
     stimmat = LA.fromLists $ map ((map fromJust) . init) stims
