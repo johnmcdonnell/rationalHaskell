@@ -193,14 +193,14 @@ fits.table <- function(df, withplot=F) {
 # {{{1 Reading in sims
 # {{{2 Params
 # }}}2
-#
+
 # Softmax, chooses true or false given a fixed probably of false
 # Wikipedia article: https://en.wikipedia.org/wiki/Softmax_activation_function
 softmax_binomial <- function(pfalse, tau) {
   if (tau==0) return(pfalse < .5)
   else {
-    exponentiated <- exp(c(pfalse, 1-pfalse) / tau)
-    odds_false <- exponentiated[1] / sum(exponentiated)
+    exponentiated <- exp(matrix(c(pfalse, 1-pfalse), ncol=2) / tau)
+    odds_false <- exponentiated[,1] / apply(exponentiated, 1, sum)
     return(runif(1)>odds_false)
   }
 }
