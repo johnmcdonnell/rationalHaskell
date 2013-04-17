@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, RecordWildCards  #-}
 
 module Tasks (  Task
               , medinSchafferTask
@@ -31,10 +31,10 @@ import Types
 import Rational
 
 
--- Encapsulates the task and its prior.
-type Task = (Stims, [PDFFromSample])
 
--- Generates priors given a task, the confidences, and a noise factor.
+-- * Functions for setting up priors in continuous spaces.
+
+-- | Generates priors given a task, the confidences, and a noise factor. Broken for now.
 getPriorsRandom :: RandomGen g => (Double, Double, Double) -> [[Maybe Double]] -> Rand g [PDFFromSample]
 getPriorsRandom (contalpha, contlambda, noise) stims  = do 
     sds <- sequence $ replicate n (lognormalM (log  pooledsd) noise)
@@ -47,19 +47,19 @@ getPriorsRandom (contalpha, contlambda, noise) stims  = do
     binomprior =  bernoulliPosterior [1, 1]
     n = (length $ head stims) - 1
 
--- Generates priors given a task, the confidences, and a dimension bias.
+-- | Generates priors given a task, the confidences, and a dimension bias.
 -- Only works in the case of two non-label dimensions, unfortunately
 -- var = sigma1 * sigma2 (this is fixed: pooledsd^2)
 -- bias = sigma1 / sigma2 log(bias)
-getPriorsBias :: (Double, Double, Maybe Double, Double) -> [[Maybe Double]] -> [PDFFromSample]
-getPriorsBias (a0, lambda0, sigma0, logbias) stims  = tpriors ++ [binomprior]
+getPriorsBias :: ModelArgs -> [[Maybe Double]] -> [PDFFromSample]
+getPriorsBias params stims  = tpriors ++ [binomprior]
   where
-    sqrtbias = sqrt $ exp logbias
-    tpriors = [tPosterior $ (mean dim, sigma, a0, lambda0) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
+    sqrtbias = sqrt $ exp $ bias params
+    tpriors = [tPosterior $ (mean dim, sigma, a0 params, lambda0 params) | (dim, sigma) <- zip (LA.toColumns stimmat) sigmas]
     sigmas = [pooledsd*sqrtbias, pooledsd/sqrtbias]
-    pooledsd = fromMaybe (((/3) . stdDev . LA.flatten) stimmat) sigma0
+    pooledsd = if (sigma0 params)==0 then (((/3) . stdDev . LA.flatten) stimmat) else (sigma0 params)
     stimmat = LA.fromLists $ map ((map fromJust) . init) stims
-    binomprior =  bernoulliPosterior [1, 1]
+    binomprior =  bernoulliPosterior [alab params, alab params]
 
 medinSchafferTask :: [Double] -> Task
 medinSchafferTask bernoulliAlphas = (medinSchafferStims, andersondists)
@@ -108,10 +108,10 @@ zeithamovaMaddoxStims n = do
     let mabify = (\x -> if isNaN x then Nothing else Just x)
     return $ map (map mabify) shuffled
 
-zeithamovaMaddox :: (RandomGen g) => (Double, Double, Maybe Double, Double) -> Int -> Rand g Task
-zeithamovaMaddox priorparams n = do
+zeithamovaMaddox :: (RandomGen g) => ModelArgs -> Int -> Rand g Task
+zeithamovaMaddox args n = do
     stims <- zeithamovaMaddoxStims n
-    priors <- return $ getPriorsBias priorparams stims
+    priors <- return $ getPriorsBias args stims
     let vectorizedstims = V.fromList $ (map V.fromList) $ stims
     return (vectorizedstims, priors)
 
@@ -143,10 +143,10 @@ mcdonnellTaskStims n nlab = do
     shuffledstims <- shuffleM stims
     return shuffledstims
 
-mcdonnellTask :: RandomGen g => (Double, Double, Maybe Double, Double) -> Int -> Int -> Rand g Task
-mcdonnellTask priorparams n nlab = do
+mcdonnellTask :: RandomGen g => ModelArgs -> Int -> Int -> Rand g Task
+mcdonnellTask args n nlab = do
     stims <- mcdonnellTaskStims n nlab
-    priors <- return $ getPriorsBias priorparams stims
+    priors <- return $ getPriorsBias args stims
     return (V.fromList $ (map V.fromList) $ stims, priors)
 
 labfirstcompare :: Maybe a -> Maybe a -> Ordering
@@ -159,12 +159,11 @@ lablastcompare (Nothing) (Just _)  = LT
 lablastcompare (Just _)  (Nothing) = GT
 lablastcompare _         _         = EQ
 
-data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show, Data, Typeable)
 
-mcdonnellTaskOrdered :: RandomGen g => SortOrder -> (Double, Double, Maybe Double, Double) -> Int -> Int -> Rand g Task
-mcdonnellTaskOrdered Interspersed priors n nlab = mcdonnellTask priors n nlab
-mcdonnellTaskOrdered order priorparams n nlab = do
-    (task, priors) <- mcdonnellTask priorparams n nlab
+mcdonnellTaskOrdered :: RandomGen g => SortOrder -> ModelArgs -> Int -> Int -> Rand g Task
+mcdonnellTaskOrdered Interspersed args n nlab = mcdonnellTask args n nlab
+mcdonnellTaskOrdered order args n nlab = do
+    (task, priors) <- mcdonnellTask args n nlab
     let sortedtask = V.modify tasksort task
     return (sortedtask, priors)
   where
@@ -172,12 +171,12 @@ mcdonnellTaskOrdered order priorparams n nlab = do
     comparison = case order of LabeledFirst -> labfirstcompare
                                LabeledLast -> lablastcompare
 
--- ^ Grid of evenly-spaced items in a grid, used as the test phase in the TV task
+-- | Grid of evenly-spaced items in a grid, used as the test phase in the TV task
 gridTest :: Stims
 gridTest = V.fromList $ (\x y -> V.fromList [Just x, Just y, Nothing]) <$> [ 0,(1/6)..1 ] <*> [ 0,(1/6)..1 ]
 
-vandistTask :: RandomGen g => (Double, Double, Maybe Double, Double) -> Int -> Double -> Rand g Task
-vandistTask priorparams n proplab = do
+vandistTask :: RandomGen g => ModelArgs -> Int -> Double -> Rand g Task
+vandistTask args n proplab = do
     let nlab = floor $ proplab * (fromIntegral n)
     let (nperCat, nrem) = quotRem n 2
     let (perCat, nlabrem) = quotRem nlab 2
@@ -205,7 +204,7 @@ vandistTask priorparams n proplab = do
     shuffled <- shuffleM $ LA.toLists withlabels
     let mabify = (\x -> if isNaN x then Nothing else Just x)
         stims = map (map (mabify)) shuffled  -- /10 moves it into a 0-1 scale
-    priors <- return $ getPriorsBias priorparams stims
+    priors <- return $ getPriorsBias args stims
     -- let dims = init $ LA.toColumns withlabels
     --     tpriors = [tPosterior (mean dim, stdDev dim, contalpha, contlambda) | dim <- dims]
     --     binomprior =  bernoulliPosterior [1, 1]

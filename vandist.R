@@ -1,4 +1,5 @@
 
+library(data.table)
 #library(ggplot2)
 library(data.table)
 source("simfunctions.R")
@@ -98,20 +99,21 @@ plot_guesses(alpha=1, proplab=.25, a0=10)
 plot_clusters(alpha=1, a0=10)
 # }}}1
 
-# {{{1 Run simulations
-
+# {{{1 Simulations
+# {{{2 Run sims
 # Here we want to check for the effect of labeled items.
 runs <- expand.grid(proplab=c(.5, 1),
-                    lambda0=c(.5, 1),
-                    a0=c(1, 5, 10, 15),
-                    bias_sd=c(0,1,2),
-                    tau=c(0, .05, .15),
-                    sigma0=c(.05, .125, .25, .5),
+                    lambda0=c(.5, 1, 5, 10),
+                    a0=c(1, 8, 15, 20),
+                    bias_sd=c(0,1,1.5, 2,3),
+                    tau=c(0, .05, .15, .25),
+                    sigma0=c(.05, .125, .25),
                     alpha=c(1, .7/.3),
                     numtrials=c(800))
-
 runs[runs$proplab==1,]$numtrials <- 400
+
 nreps <- 25
+
 sims <- as.data.table(run_vandist_sims(runs, nreps))
 sims[proplab==1, block:=floor((trialnum-1)/40)+1]
 
@@ -124,9 +126,33 @@ for (col in names(runs)) {
 sims[,list(acc=mean(hit)), by=c(names(runs), 'block')]
 accuracies <- sims[,list(acc=mean(hit)), by=c(names(runs), 'block')]
 #accuracies <- ddply(sims.reindexed, c(names(runs), 'block'), summarise, acc=mean(hit))
+accuracies <- read.csv("vandistsims.csv")
 write.csv(accuracies, file="vandistsims.csv")
-ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_grid(alpha~bias_sd)
+# }}}2
+
+# {{{2 Error function
+expone <- c(.73, .80, .79, .87, .87, .87, .90, .88, .93, .91)
+exptwo <- c(.72, .81, .8,  .89, .92, .89, .94, .93, .95, .94)
+
+vandist.sqerr <- function(block) {
+  ifelse (block['proplab']==1,
+          block['acc']-exptwo[block['block']],
+          block['acc']-expone[block['block']]) ^ 2
+}
+
+accuracies$vandisterr <- apply(accuracies, 1, vandist.sqerr)
+
+params <- names(runs)[2:(length(names(runs))-1)]
+subjfits <- ddply(accuracies, params, summarise, err=sum(vandisterr))
+
+head(subjfits[with(subjfits, order(err)),])
+
+# }}}2
+
+# {{{2 Plot sims
+ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ bias_sd+ tau+ sigma0)
 ggsave("figs/vandistsims.pdf")
-# }}}1
+# }}}2
+
 #
 # vi: foldmethod=marker

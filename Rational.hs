@@ -56,7 +56,7 @@ clusterPosterior cprior distributions stimuli assignments newstim = map (/norm) 
     ndim = length distributions
 
 -- | For all missing items in the querystim, infers the most likely possible
--- | outcome, taking all possible cluster assignments into account.
+--   outcome, taking all possible cluster assignments into account.
 infer :: (ClusterPrior, [PDFFromSample]) -> Stims -> Partition
          -> Stim       -- ^ Stimulus being queried.
          -> ([Double], [Double]) -- ^ (List of predictions for the dimension features, and List of posteriors for the clusters, INCLUDING EMPTY)

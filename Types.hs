@@ -1,6 +1,10 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, GeneralizedNewtypeDeriving #-}
 
-module Types (Stim,
+module Types (SortOrder (..),
+              Encoding (..),
+              ModelArgs (..),
+              Task,
+              Stim,
               Stims,
               Partition,
               validatePartition,
@@ -11,9 +15,12 @@ module Types (Stim,
               tPosterior,
               dirichletProcess,
               Params,
-              Model (..)
+              Model (..),
+              runModel
               ) where
 
+import Data.Data
+import Data.Typeable
 import Data.Maybe (Maybe, fromJust, isJust)
 import qualified Data.Vector as V
 import qualified Data.Map as Map
@@ -27,6 +34,40 @@ import Statistics.Distribution.StudentT as StatDist.T
 import Statistics.Sample
 
 import Utils
+
+-- * Task parameters
+
+data SortOrder = Interspersed | LabeledFirst | LabeledLast deriving (Show, Data, Typeable)
+
+data Encoding = EncodeActual | EncodeGuess | EncodeGuessSoft deriving (Show, Data, Typeable)
+
+-- | Command line arguments.
+data ModelArgs = MedinSchaffer |
+                 TVTask {
+                   alphaparam :: Double,
+                   order :: SortOrder,
+                   encoding :: Encoding,
+                   sigma0 :: Double,
+                   a0 :: Double,
+                   alab :: Double,
+                   lambda0 :: Double,
+                   bias :: Double,
+                   nlabarg :: Int
+                 } | Vandist {
+                   alphaparam :: Double,
+                   encoding :: Encoding,
+                   sigma0 :: Double,
+                   a0 :: Double,
+                   alab :: Double,
+                   lambda0 :: Double,
+                   bias :: Double,
+                   numtrials :: Int,
+                   proplab :: Double
+                 }
+                 deriving (Data, Show, Typeable)
+
+-- | Encapsulates the task and its prior.
+type Task = (Stims, [PDFFromSample])
 
 -- * Stim datatype and associated functions
 type Stim = V.Vector (Maybe Double)
@@ -56,8 +97,7 @@ clusterItems assignments stims = takeWhile (not . V.null) clusters
   where
     clusters = map (\i-> V.map (stims V.!) $ V.elemIndices (Just i) assignments) [0..]
 
--- * Type of function to derive PDFs from a sample of points
-
+-- | Type of function to derive PDFs from a sample of points
 type PDFFromSample = V.Vector Double -> (Maybe Double -> Double, Double)
 
 fillerDistribtution :: PDFFromSample
@@ -109,8 +149,11 @@ dirichletProcess alpha assignments = pPartitions ++ [pNew]
 
 type Params = (ClusterPrior, [PDFFromSample])
 
--- ^ Monad for model tracking state
-newtype Model a = Model {
-      runM :: ReaderT (Params, Stims) (StateT Partition (Rand StdGen)) a
-          } deriving (Monad, MonadReader (Params, Stims), MonadState Partition)
+-- * Monad for tracking model state
 
+newtype Model r s a = Model {
+      runM :: ReaderT r (StateT s (Rand StdGen)) a
+          } deriving (Monad, MonadReader r, MonadState s)
+
+runModel :: Model r s a -> r -> s -> Rand StdGen (a, s)
+runModel model read state = flip runStateT state $ flip runReaderT read $ runM model
