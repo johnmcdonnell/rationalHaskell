@@ -22,7 +22,7 @@ runs <- expand.grid(task="tvtask",
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 100
+nreps <- 10
 ofile <- "search_sd.csv"
 ofile <- "andersonparams.csv"
 sims <- read.csv(ofile)
