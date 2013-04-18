@@ -11,43 +11,62 @@ simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, alab=1, la
 runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.25),
-                    a0=c(1),
+                    sigma0=c(.125, .25),
+                    a0=c(15),
                     alab=c(1),
                     lambda0=c(1),
                     alpha=c(1, .7/.3),
-                    tau=c(.05), 
-                    bias_sd=c(0),
+                    tau=c(0, .05, .15), 
+                    bias_sd=c(0, 1.5),
                     encoding=c("encodeactual"))
-runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
+runs <- subset(runs, ! (((nlab==4 | alpha==1) & order!="interspersed") | (alpha==1 & nlab==4) | (order=="labeledfirst" & nlab!=16)))
 nrow(runs)
 
-nreps <- 100
-ofile <- "search_sd.csv"
-ofile <- "andersonparams.csv"
+nreps <- 400
+ofile <- "simresults/checktaus.csv"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
 
 counts <- ddply(sims, .(nlab, alpha, sigma0, a0, alab, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
-#counts$ratio <- counts$Bimodal/counts$"2D"
-#counts$params <- do.call(paste, c(counts[c("alpha", "tau")], sep = ":"))
 counts$twod <- counts$"2D"
-#print(ggplot(counts) + geom_line(aes(x=nlab, y=twod, group=params, linetype=factor(tau), colour=factor(alpha))) + facet_wrap(~order))
 # }}}1
 
-# {{{1 taking a look
-interspersed <- subset(counts, order=="interspersed")
-countsquantified <- ddply(interspersed, .(alpha, sigma0, a0, lambda0, tau, order, bias_sd, encoding), function(df) {
-      unlab <- subset(df, nlab==0)
-      lab <- subset(df, nlab==16)
-      denom <- function(x) x$twod + x$Unimodal + x$Bimodal #+ x$Null
-      unlabpercent <- unlab$Bimodal / denom(unlab)
-      labpercent <- lab$Bimodal / denom(lab)
-      data.frame(lab=labpercent, unlab=unlabpercent)})
-head(countsquantified)
-ggplot(countsquantified) + geom_point(aes(x=nlab, y=unlab, colour=factor(sigma0))) + geom_abline() + facet_grid(lambda0~a0)
+# {{{1 Fitting model fits to data
+# {{{2 Experiment 1
 
+get.expone.proportions <- function(df) {
+      denom <- function(x) x$twod + x$Unimodal + x$Bimodal #+ x$Null
+      get.condition.proportions <- function(cond.df) {
+        denom <- denom(cond.df)
+        data.frame(
+          bimod = cond.df$Bimodal / denom,
+          unimod = cond.df$Unimodal / denom,
+          twod = cond.df$twod / denom)
+      }
+      
+      ddply(df, .(nlab), get.condition.proportions)
+}
+params <- .(sigma0, a0, alab, lambda0, tau, order, bias_sd, encoding)
+
+expone <- subset(counts, order=="interspersed" & alpha>1)
+expone.condition.proportions <- ddply(expone, params, get.expone.proportions)
+
+score.run <- function(df) {
+  bimod.props <- c(0.5714,.442857, .3, .3)
+  unimod.props <- c(0.257142,.22857, .3, .2)
+  twod.props <- c(.1714286, .32857, .4, .5)
+  ssqerr <- sum(c(df$bimod-bimod.props, df$unimod-unimod.props, df$twod-twod.props) ^ 2)
+  data.frame(sqerr=ssqerr)
+}
+model.fits.to.data <- ddply(expone.condition.proportions, params, score.run)
+model.fits.to.data[with(model.fits.to.data, order(-sqerr)),]
+
+head(model.fits.to.data[with(model.fits.to.data, order(sqerr)),])
+head(subset(model.fits.to.data[with(model.fits.to.data, order(sqerr)),], bias_sd==0))
+
+subset(expone.condition.proportions, a0==12.5 & sigma0==.125)
+# }}}2
 # }}}1
 
 # {{{1 Plots
