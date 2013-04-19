@@ -150,9 +150,13 @@ head(subjfits[with(subjfits, order(err)),])
 # }}}2
 
 # {{{2 Plot sims
-ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ bias_sd+ tau+ sigma0)
+ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0 + alab + bias_sd+ tau+ sigma0)
 ggsave("figs/vandistsims.pdf")
-# }}}2
 
+# plot just the winner.
+head(accuracies)
+ggplot(subset(accuracies, alpha==1 & sigma0==.125 & a0==20 & tau==.05 & bias_sd==1.5 & lambda0 == 1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ bias_sd+ tau+ sigma0)
+# }}}2
+# }}}1
 #
 # vi: foldmethod=marker

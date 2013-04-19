@@ -219,7 +219,6 @@ run_anderson_once <- function(task="tvask", order=NA, encoding=NA, ...) {
 }
 # }}}1
 
-
 # {{{1 Simulation code
 simulate_anderson <- function(tau=.05, plotting=F, echo=F, ...) {
     args <- list(...)
