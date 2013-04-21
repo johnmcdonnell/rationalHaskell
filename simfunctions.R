@@ -225,6 +225,7 @@ simulate_anderson <- function(tau=.05, plotting=F, echo=F, ...) {
     args <- list(...)
     #print(args$sigma0)
     resps <- run_anderson_once(...)
+    clusters <- subset(resps, type=="CLUST")
     inferences <- subset(resps, type=="INFER")
     inferences$resp <- apply(matrix(inferences$label), 1, function(p) softmax_binomial(p, tau))
     if (echo) { print( inferences) }
@@ -244,8 +245,8 @@ simulate_anderson <- function(tau=.05, plotting=F, echo=F, ...) {
     inferences$order <- args$order
     inferences$nlab <- args$nlab
     inferences$encoding <- args$encoding
-
-    fits.table(inferences)
+    
+    list(glc=fits.table(inferences), clusters=clusters)
 }
 
 
@@ -297,25 +298,34 @@ test.clust.proportion <- function() {
 run_sims <- function(runs, nreps, ofile) {
     test_param_set <- function(df) {
         count <- 0
-        ret <- data.frame()
+        glc <- data.frame()
+        clusters <- data.frame()
         while ( count < nreps ) {
             if (df$bias_sd==0) { df$bias <- 0 }
             else { df$bias <- rnorm(1, mean=0, sd=df$bias_sd) }
             #df$bias <- df$bias_sd
             this_sim <- try(do.call(simulate_anderson, df))
-            if (class(this_sim) == "try-error") next # Sometimes the call fails.
-            this_sim$actual_bias <- df$bias
+            if (class(this_sim$glc) == "try-error") next # Sometimes the call fails.
+            this_sim$glc$actual_bias <- df$bias
+            this_sim$clusters$actual_bias <- df$bias
+            
+            # Write out the results:
+            glc <- rbind(glc, this_sim$glc)
+            clusters <- rbind(clusters, this_sim$clusters)
+            
             count <- count + 1
-            ret <- rbind( ret, this_sim )
         }
-        ret
+        list(glc=glc, clusters=clusters)
         #count <- count + nreps
         #setTxtProgressBar(pb, count)
     }
-    all_sims <- ddply(runs, names(runs), test_param_set, .parallel=T)
+    all_sims <- dlply(runs, names(runs), test_param_set, .parallel=T)
+    glc <- ldply(all_sims, function(item) item$glc)
+    clusters <- ldply(all_sims, function(item) item$clusters)
     
-    write.csv(all_sims, file=ofile)
-    all_sims
+    write.csv(glc, file=paste(ofile, "glc", "csv", sep="."))
+    write.csv(clusters, file=paste(ofile, "clusts", "csv", sep="."))
+    glc
 }
 
 # }}}1

@@ -12,7 +12,7 @@ runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed"),
                     sigma0=c(.25),
-                    a0=c(10),
+                    a0=c(16),
                     alab=c(.5),
                     lambda0=c(1),
                     alpha=c(.7/.3),
@@ -36,21 +36,19 @@ counts
 runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
-                    sigma0=c(.25),
-                    a0=c(5),
+                    sigma0=c(.125),
+                    a0=c(25),
                     alab=c(1),
                     lambda0=c(1),
                     alpha=c(1, .7/.3),
                     tau=c(.05), 
-                    bias_sd=c(0),
+                    bias_sd=c(0, 1.5),
                     encoding=c("encodeactual"))
 runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
 nrow(runs)
 
-nreps <- 300
-ofile <- "search_sd.csv"
-ofile <- "andersonparams.csv"
-ofile <- "data/andersonparams_higha0.csv"
+nreps <- 5000
+ofile <- "data/forpub"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
