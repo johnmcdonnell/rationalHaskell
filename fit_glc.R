@@ -65,7 +65,16 @@ model.fits.to.data[with(model.fits.to.data, order(-sqerr)),]
 head(model.fits.to.data[with(model.fits.to.data, order(sqerr)),])
 head(subset(model.fits.to.data[with(model.fits.to.data, order(sqerr)),], bias_sd==0))
 
-subset(expone.condition.proportions, a0==12.5 & sigma0==.125)
+rate.bimodality.effect <- function(df) {
+  fourlab <- subset(df, nlab==4)
+  sixteenlab <- subset(df, nlab==16)
+  data.frame(bimodeffect=fourlab$bimod - sixteenlab$bimod)
+}
+
+bimod.effect <- ddply(expone.condition.proportions, params, rate.bimodality.effect)
+subset(bimod.effect, bias_sd==1.5)
+ddply(bimod.effect, .(sigma0), summarise, mean(bimodeffect))
+ddply(bimod.effect, .(bias_sd), summarise, mean(bimodeffect))
 # }}}2
 # }}}1
 
