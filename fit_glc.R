@@ -6,13 +6,38 @@ source("simfunctions.R")
 simulate_anderson(task="tvtask", alpha=2.333, nlab=-1, bias=0, a0=10, alab=1, lambda0=1, sigma0=0.15, tau=0.05, plotting=T, order="interspersed", echo=F)
 
 # }}}1
+#
+# {{{1 Just simulate exp 1
+runs <- expand.grid(task="tvtask",
+                    nlab=c(0,4,16,-1), 
+                    order=c("interspersed"),
+                    sigma0=c(.25),
+                    a0=c(16),
+                    alab=c(.5),
+                    lambda0=c(1),
+                    alpha=c(.7/.3),
+                    tau=c(.05), 
+                    bias_sd=c(0),
+                    encoding=c("encodeactual"))
+runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
+nrow(runs)
+
+nreps <- 300
+ofile <- "/dev/null"
+sims <- run_sims(runs, nreps, ofile)
+sims$nlab[sims$nlab==-1] <- Inf
+
+counts <- ddply(sims, .(nlab, alpha, sigma0, a0, alab, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
+counts$twod <- counts$"2D"
+counts
+# }}}1
 
 # {{{1 Run sims across conditions.
 runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
                     sigma0=c(.125),
-                    a0=c(15),
+                    a0=c(30),
                     alab=c(1),
                     lambda0=c(1),
                     alpha=c(1, .7/.3),
@@ -22,8 +47,8 @@ runs <- expand.grid(task="tvtask",
 runs <- subset(runs, ! (((nlab==4 | alpha==1) & order!="interspersed") | (alpha==1 & nlab==4) | (order=="labeledfirst" & nlab!=16)))
 nrow(runs)
 
-nreps <- 1000
-ofile <- "simresults/forpub.csv"
+nreps <- 101
+ofile <- "data/forpub"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)
 sims$nlab[sims$nlab==-1] <- Inf
@@ -80,7 +105,7 @@ ddply(bimod.effect, .(bias_sd), summarise, mean(bimodeffect))
 
 # {{{1 Plots
 # {{{2 Setup
-counts.melted <- melt(subset(counts, tau==.05 & sigma0==.125 & a0==15),
+counts.melted <- melt(counts,
                       id=c("nlab", "alpha", "tau", "order", "encoding", "bias_sd", "sigma0", "a0"),
                       measure.vars=c("2D", "Bimodal", "Unimodal", "Null"),
                       variable.name="bestfit",
@@ -140,8 +165,6 @@ plot.data <- subset(counts.melted, alpha==highalpha)
 plot.data$cond <- factor(apply(plot.data, 1, identify.exp3.cond))
 plot.data$cond <- factor(plot.data$cond, levels=levels(plot.data$cond)[c(4,3,2,1)])
 plot.data <- subset(plot.data, ! is.na(cond))
-
-plot.data
 
 ggplot(plot.data) + geom_line(aes(x=cond, y=count, group=bias_sd, linetype=factor(bias_sd)))  + facet_grid(~bestfit)
 ggsave("exp3.pdf")
