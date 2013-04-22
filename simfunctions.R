@@ -304,7 +304,7 @@ run_sims <- function(runs, nreps, ofile) {
             else { df$bias <- rnorm(1, mean=0, sd=df$bias_sd) }
             #df$bias <- df$bias_sd
             this_sim <- try(do.call(simulate_anderson, df))
-            if (class(this_sim$glc) == "try-error") next # Sometimes the call fails.
+            if (class(this_sim) == "try-error") next # Sometimes the call fails.
             this_sim$glc$actual_bias <- df$bias
             this_sim$clusters$actual_bias <- df$bias
             
