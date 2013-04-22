@@ -37,17 +37,17 @@ runs <- expand.grid(task="tvtask",
                     nlab=c(0,4,16,-1), 
                     order=c("interspersed", "labeledfirst", "labeledlast"),
                     sigma0=c(.125),
-                    a0=c(25),
+                    a0=c(30),
                     alab=c(1),
                     lambda0=c(1),
                     alpha=c(1, .7/.3),
                     tau=c(.05), 
                     bias_sd=c(0, 1.5),
                     encoding=c("encodeactual"))
-runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4)))
+runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4) | (order=="labeledfirst" & nlab!=16) | (order=="labeledlast" & nlab==4)))
 nrow(runs)
 
-nreps <- 5000
+nreps <- 101
 ofile <- "data/forpub"
 sims <- read.csv(ofile)
 #sims <- run_sims(runs, nreps, ofile)

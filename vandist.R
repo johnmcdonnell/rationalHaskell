@@ -87,7 +87,7 @@ vandist_et_al_sim <- function(bias_sd=0, n=1, tau=.05, ...) {
 # }}}1
 
 # {{{1 Test above functions
-accuracies <- vandist_et_al_sim(n=100, a0=15, alpha=2.333, sigma0=.125, bias_sd=1)
+accuracies <- vandist_et_al_sim(n=1, a0=12.5, alab=1, alpha=1, sigma0=.125, bias_sd=0)
 ggplot(accuracies) + geom_line(aes(x=factor(block), y=acc, group=factor(proplab), colour=factor(proplab)))
 
 plot_label(alpha=2.3333, proplab=.5, a0=10, bias=2)
@@ -103,16 +103,17 @@ plot_clusters(alpha=1, a0=10)
 # {{{2 Run sims
 # Here we want to check for the effect of labeled items.
 runs <- expand.grid(proplab=c(.5, 1),
-                    lambda0=c(.5, 1, 5, 10),
-                    a0=c(1, 8, 15, 20),
-                    bias_sd=c(0,1,1.5, 2,3),
-                    tau=c(0, .05, .15, .25),
-                    sigma0=c(.05, .125, .25),
-                    alpha=c(1, .7/.3),
+                    lambda0=c(1),
+                    a0=c(15),
+                    alab=c(0),
+                    bias_sd=c(0,1.5),
+                    tau=c(.05),
+                    sigma0=c(.125),
+                    alpha=c(1),
                     numtrials=c(800))
 runs[runs$proplab==1,]$numtrials <- 400
 
-nreps <- 25
+nreps <- 1000
 
 sims <- as.data.table(run_vandist_sims(runs, nreps))
 sims[proplab==1, block:=floor((trialnum-1)/40)+1]
@@ -123,22 +124,23 @@ for (col in names(runs)) {
   sims[, eval(col.expression)]
 }
 
-sims[,list(acc=mean(hit)), by=c(names(runs), 'block')]
+sims[,list(acc=mean(hit)), by=c(names(runs), 'block')] 
 accuracies <- sims[,list(acc=mean(hit)), by=c(names(runs), 'block')]
-#accuracies <- ddply(sims.reindexed, c(names(runs), 'block'), summarise, acc=mean(hit))
-accuracies <- read.csv("vandistsims.csv")
-write.csv(accuracies, file="vandistsims.csv")
+write.csv(accuracies, file="data/vandistsims.csv")
+accuracies <- read.csv("data/vandistsims.csv")
 # }}}2
 
-# {{{2 Error function
+# {{{2 Testing against empirical data
+# {{{3 Functions
 expone <- c(.73, .80, .79, .87, .87, .87, .90, .88, .93, .91)
 exptwo <- c(.72, .81, .8,  .89, .92, .89, .94, .93, .95, .94)
 
 vandist.sqerr <- function(block) {
   ifelse (block['proplab']==1,
-          block['acc']-exptwo[block['block']],
-          block['acc']-expone[block['block']]) ^ 2
+          as.numeric(block['acc'])-exptwo[block['block']],
+          as.numeric(block['acc'])-expone[block['block']]) ^ 2
 }
+# }}}3
 
 accuracies$vandisterr <- apply(accuracies, 1, vandist.sqerr)
 
@@ -146,13 +148,31 @@ params <- names(runs)[2:(length(names(runs))-1)]
 subjfits <- ddply(accuracies, params, summarise, err=sum(vandisterr))
 
 head(subjfits[with(subjfits, order(err)),])
-
+head(subset(subjfits[with(subjfits, order(err)),], bias_sd==0))
 # }}}2
 
 # {{{2 Plot sims
-ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ bias_sd+ tau+ sigma0)
+ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ alab+ bias_sd+ tau+ sigma0)
 ggsave("figs/vandistsims.pdf")
 # }}}2
 
+# {{{2 Plot winner against empirical data
+# {{{3 Readying data
+expone <- c(.73, .80, .79, .87, .87, .87, .90, .88, .93, .91)
+exptwo <- c(.72, .81, .8,  .89, .92, .89, .94, .93, .95, .94)
+empirical <- data.frame(block=1:length(expone), expone=expone, exptwo=exptwo)
+empirical.melted <- melt(empirical, id.vars="block", variable.name="experiment", value.name="acc")
+sim.using <- subset(accuracies, alpha==1 & lambda0==1 & a0==15 & alab==1 & bias_sd==1.5)
+sim.using <- subset(accuracies, alpha==1 & lambda0==1 & a0==15 & alab==1 & bias_sd==0)
+# }}}3
+
+ggplot() + 
+  geom_line(data=sim.using, aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + 
+  geom_line(data=empirical.melted, aes(x=factor(block), y=acc, group=experiment, linetype=experiment)) +
+  scale_y_continuous(limits=c(.5,1))
+
+ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ alab+ bias_sd+ tau+ sigma0)
+ggsave("figs/vandistsims.pdf")
+# }}}2
 #
 # vi: foldmethod=marker
