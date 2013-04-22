@@ -44,7 +44,7 @@ runs <- expand.grid(task="tvtask",
                     tau=c(.05), 
                     bias_sd=c(0, 1.5),
                     encoding=c("encodeactual"))
-runs <- subset(runs, ! ((alpha==1 & order!="interspersed") | (alpha==1 & nlab==4) | (order=="labeledfirst" & nlab!=16) | (order=="labeledlast" & nlab==4)))
+runs <- subset(runs, ! (((nlab==4 | alpha==1) & order!="interspersed") | (alpha==1 & nlab==4) | (order=="labeledfirst" & nlab!=16)))
 nrow(runs)
 
 nreps <- 101
@@ -55,7 +55,52 @@ sims$nlab[sims$nlab==-1] <- Inf
 
 counts <- ddply(sims, .(nlab, alpha, sigma0, a0, alab, lambda0, tau, order, bias_sd, encoding), function(x) summary(x$BestFit))
 counts$twod <- counts$"2D"
-counts
+# }}}1
+
+# {{{1 Fitting model fits to data
+# {{{2 Experiment 1
+
+get.expone.proportions <- function(df) {
+      denom <- function(x) x$twod + x$Unimodal + x$Bimodal #+ x$Null
+      get.condition.proportions <- function(cond.df) {
+        denom <- denom(cond.df)
+        data.frame(
+          bimod = cond.df$Bimodal / denom,
+          unimod = cond.df$Unimodal / denom,
+          twod = cond.df$twod / denom)
+      }
+      
+      ddply(df, .(nlab), get.condition.proportions)
+}
+params <- .(sigma0, a0, alab, lambda0, tau, order, bias_sd, encoding)
+
+expone <- subset(counts, order=="interspersed" & alpha>1)
+expone.condition.proportions <- ddply(expone, params, get.expone.proportions)
+
+score.run <- function(df) {
+  bimod.props <- c(0.5714,.442857, .3, .3)
+  unimod.props <- c(0.257142,.22857, .3, .2)
+  twod.props <- c(.1714286, .32857, .4, .5)
+  ssqerr <- sum(c(df$bimod-bimod.props, df$unimod-unimod.props, df$twod-twod.props) ^ 2)
+  data.frame(sqerr=ssqerr)
+}
+model.fits.to.data <- ddply(expone.condition.proportions, params, score.run)
+model.fits.to.data[with(model.fits.to.data, order(-sqerr)),]
+
+head(model.fits.to.data[with(model.fits.to.data, order(sqerr)),])
+head(subset(model.fits.to.data[with(model.fits.to.data, order(sqerr)),], bias_sd==0))
+
+rate.bimodality.effect <- function(df) {
+  fourlab <- subset(df, nlab==4)
+  sixteenlab <- subset(df, nlab==16)
+  data.frame(bimodeffect=fourlab$bimod - sixteenlab$bimod)
+}
+
+bimod.effect <- ddply(expone.condition.proportions, params, rate.bimodality.effect)
+subset(bimod.effect, bias_sd==1.5)
+ddply(bimod.effect, .(sigma0), summarise, mean(bimodeffect))
+ddply(bimod.effect, .(bias_sd), summarise, mean(bimodeffect))
+# }}}2
 # }}}1
 
 # {{{1 Plots
