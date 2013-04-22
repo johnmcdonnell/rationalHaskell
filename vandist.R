@@ -152,9 +152,8 @@ head(subset(subjfits[with(subjfits, order(err)),], bias_sd==0))
 # }}}2
 
 # {{{2 Plot sims
-ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0+ a0+ alab+ bias_sd+ tau+ sigma0)
+ggplot(subset(accuracies, alpha==1)) + geom_line(aes(x=factor(block), y=acc, group=proplab, colour=factor(proplab))) + facet_wrap(~ lambda0 + a0 + alab + bias_sd + tau + sigma0)
 ggsave("figs/vandistsims.pdf")
-# }}}2
 
 # {{{2 Plot winner against empirical data
 # {{{3 Readying data
